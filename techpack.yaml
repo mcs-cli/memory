@@ -22,7 +22,7 @@ components:
   - id: homebrew
     displayName: Homebrew
     description: macOS package manager
-    type: brewPackage
+    type: configuration
     shell: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
     doctorChecks:
       - type: commandExists
@@ -59,6 +59,13 @@ components:
     type: configuration
     dependencies: [ollama]
     shell: "brew services start ollama"
+    doctorChecks:
+      - type: commandExists
+        name: "Ollama service running"
+        section: AI Models
+        command: curl
+        args: ["-sf", "http://localhost:11434/api/tags"]
+        fixCommand: "brew services start ollama"
 
   - id: ollama-nomic-embed
     description: Pull nomic-embed-text model for docs-mcp-server embeddings
@@ -146,14 +153,3 @@ templates:
     placeholders:
       - __PROJECT_DIR_NAME__
     contentFile: templates/continuous-learning.md
-
-# ---------------------------------------------------------------------------
-# Supplementary doctor checks
-# ---------------------------------------------------------------------------
-supplementaryDoctorChecks:
-  - type: commandExists
-    name: "Ollama service running"
-    section: AI Models
-    command: curl
-    args: ["-sf", "http://localhost:11434/api/tags"]
-    fixCommand: "open -a Ollama"
