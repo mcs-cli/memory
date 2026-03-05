@@ -87,7 +87,7 @@ components:
       command: npx
       args:
         - "-y"
-        - "@arabold/docs-mcp-server@latest"
+        - "@arabold/docs-mcp-server@2.0.4"
         - "--read-only"
         - "--telemetry=false"
       env:
