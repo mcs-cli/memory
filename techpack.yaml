@@ -133,7 +133,7 @@ components:
   # ── Configuration ───────────────────────────────────────────────────────
   - id: settings
     displayName: Settings
-    description: Disables auto-memory in favor of continuous learning system
+    description: Disables built-in auto-memory in favor of continuous learning system
     isRequired: true
     settingsFile: config/settings.json
 

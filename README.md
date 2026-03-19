@@ -134,7 +134,7 @@ Decisions use an ADR-inspired template: **Decision > Context > Options Considere
 
 | Setting | Value | Purpose |
 |---------|-------|---------|
-| `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Disables built-in memory in favor of the continuous learning system |
+| `autoMemoryEnabled` | `false` | Disables built-in memory in favor of the continuous learning system |
 
 ---
 
@@ -171,7 +171,7 @@ mcs doctor
 mcs-continuous-learning/
 ├── techpack.yaml                       # Manifest — defines all components
 ├── config/
-│   └── settings.json                   # Disables built-in auto-memory
+│   └── settings.json                   # Disables built-in auto-memory (autoMemoryEnabled)
 ├── hooks/
 │   ├── ollama-status.sh                # Ollama health + memory re-indexing
 │   └── continuous-learning-activator.sh # Knowledge extraction reminder
@@ -192,7 +192,7 @@ mcs-continuous-learning/
 
 | Pack | Description |
 |------|-------------|
-| [mcs-core-pack](https://github.com/bguidolim/mcs-core-pack) | Foundational settings, plugins, git workflows, and Serena code navigation |
+| [mcs-core-pack](https://github.com/bguidolim/mcs-core-pack) | Foundational settings, plugins, and git workflows |
 | [mcs-ios-pack](https://github.com/bguidolim/mcs-ios-pack) | Xcode integration, simulator management, and Apple documentation |
 
 ---
