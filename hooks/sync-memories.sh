@@ -4,7 +4,7 @@ set -euo pipefail
 trap 'exit 0' ERR
 
 MEMORIES_DIR=".claude/memories"
-TIMESTAMP_FILE=".claude/.mcs-last-indexed"
+TIMESTAMP_FILE=".claude/.memories-last-indexed"
 
 # Check if jq is available
 command -v jq >/dev/null 2>&1 || exit 0

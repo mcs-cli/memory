@@ -141,7 +141,7 @@ components:
     gitignore:
       - "*.local.*"
       - ".claude/memories"
-      - ".claude/.mcs-last-indexed"
+      - ".claude/.memories-last-indexed"
 
 # ---------------------------------------------------------------------------
 # Templates — CLAUDE.local.md sections
