@@ -1,5 +1,5 @@
 schemaVersion: 1
-identifier: mcs-continuous-learning
+identifier: memory
 displayName: "Continuous Learning"
 description: Persistent memory and knowledge management for Claude Code
 author: Bruno Guidolim

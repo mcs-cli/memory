@@ -1,8 +1,8 @@
 # Continuous Learning
 
-A [tech pack](https://github.com/bguidolim/mcs) that gives Claude Code **persistent memory across sessions** — capturing debugging discoveries, architectural decisions, and project conventions into a searchable knowledge base that makes Claude increasingly effective over time.
+A [tech pack](https://github.com/mcs-cli/mcs) that gives Claude Code **persistent memory across sessions** — capturing debugging discoveries, architectural decisions, and project conventions into a searchable knowledge base that makes Claude increasingly effective over time.
 
-Built for the [`mcs`](https://github.com/bguidolim/mcs) configuration engine.
+Built for the [`mcs`](https://github.com/mcs-cli/mcs) configuration engine.
 
 ```
 identifier: mcs-continuous-learning
@@ -144,10 +144,10 @@ Decisions use an ADR-inspired template: **Decision > Context > Options Considere
 
 ```bash
 # 1. Install mcs
-brew install bguidolim/tap/my-claude-setup
+brew install mcs-cli/tap/mcs
 
 # 2. Register this tech pack
-mcs pack add bguidolim/mcs-continuous-learning
+mcs pack add mcs-cli/memory
 
 # 3. Sync your project
 cd ~/Developer/my-project
@@ -184,16 +184,16 @@ mcs-continuous-learning/
 
 | Pack | Description |
 |------|-------------|
-| [mcs-core-pack](https://github.com/bguidolim/mcs-core-pack) | Foundational settings, plugins, and git workflows |
-| [mcs-ios-pack](https://github.com/bguidolim/mcs-ios-pack) | Xcode integration, simulator management, and Apple documentation |
+| [mcs-core-pack](https://github.com/mcs-cli/mcs-core-pack) | Foundational settings, plugins, and git workflows |
+| [mcs-ios-pack](https://github.com/mcs-cli/mcs-ios-pack) | Xcode integration, simulator management, and Apple documentation |
 
 ---
 
 ## Links
 
-- [MCS (My Claude Setup)](https://github.com/bguidolim/mcs) — the configuration engine
-- [Creating Tech Packs](https://github.com/bguidolim/mcs/blob/main/docs/creating-tech-packs.md) — guide for building your own
-- [Tech Pack Schema](https://github.com/bguidolim/mcs/blob/main/docs/techpack-schema.md) — full YAML reference
+- [MCS (My Claude Setup)](https://github.com/mcs-cli/mcs) — the configuration engine
+- [Creating Tech Packs](https://github.com/mcs-cli/mcs/blob/main/docs/creating-tech-packs.md) — guide for building your own
+- [Tech Pack Schema](https://github.com/mcs-cli/mcs/blob/main/docs/techpack-schema.md) — full YAML reference
 
 ---
 
