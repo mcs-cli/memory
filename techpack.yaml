@@ -10,33 +10,24 @@ minMCSVersion: "2026.3.22"
 # ---------------------------------------------------------------------------
 components:
   # ── Dependencies ────────────────────────────────────────────────────────
-  - id: homebrew
-    displayName: Homebrew
-    description: macOS package manager
-    type: configuration
-    shell: '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
-    doctorChecks:
-      - type: commandExists
-        name: Homebrew
-        section: Dependencies
-        command: brew
-
   - id: node
     displayName: Node.js
     description: JavaScript runtime (for npx-based MCP servers)
-    dependencies: [homebrew]
     brew: node
 
   - id: gh
     displayName: GitHub CLI
     description: GitHub CLI for PR operations
-    dependencies: [homebrew]
     brew: gh
+
+  - id: jq
+    displayName: jq
+    description: Lightweight JSON processor
+    brew: jq
 
   - id: ollama
     displayName: Ollama
     description: Local LLM runtime
-    dependencies: [homebrew]
     brew: ollama
 
   - id: ollama-service
@@ -68,6 +59,7 @@ components:
   # ── MCP Servers ─────────────────────────────────────────────────────────
   - id: docs-mcp-server
     description: Semantic search over memories using local Ollama embeddings
+    isRequired: true
     dependencies: [node, ollama]
     mcp:
       command: npx
@@ -85,6 +77,7 @@ components:
   - id: skill-continuous-learning
     displayName: continuous-learning skill
     description: Extracts learnings and decisions from sessions into memory
+    isRequired: true
     skill:
       source: skills/continuous-learning
       destination: continuous-learning
@@ -93,6 +86,7 @@ components:
   - id: hook-continuous-learning
     displayName: Continuous learning activator
     description: Reminds to evaluate learnings on each prompt
+    isRequired: true
     hookEvent: UserPromptSubmit
     hook:
       source: hooks/continuous-learning-activator.sh
@@ -101,7 +95,7 @@ components:
   - id: hook-sync-memories
     displayName: Sync memories hook
     description: Checks Ollama health and syncs docs-mcp-server library on session start
-    dependencies: [ollama, docs-mcp-server, skill-continuous-learning]
+    dependencies: [ollama, docs-mcp-server, jq]
     hookEvent: SessionStart
     hookAsync: true
     hookTimeout: 120
@@ -113,7 +107,7 @@ components:
   - id: hook-reindex-memories
     displayName: Reindex memories hook
     description: Reindexes docs-mcp-server library when memories have changed mid-session
-    dependencies: [ollama, docs-mcp-server]
+    dependencies: [ollama, docs-mcp-server, jq]
     hookEvent: UserPromptSubmit
     hookAsync: true
     hookTimeout: 120
@@ -126,13 +120,11 @@ components:
   - id: settings
     displayName: Settings
     description: Disables built-in auto-memory in favor of continuous learning system
-    isRequired: true
     settingsFile: config/settings.json
 
   - id: gitignore
     displayName: Global gitignore
     description: Ignores memory files from version control
-    isRequired: true
     gitignore:
       - "*.local.*"
       - ".claude/memories"

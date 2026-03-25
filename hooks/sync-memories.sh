@@ -37,10 +37,20 @@ export OPENAI_API_KEY=ollama
 export OPENAI_API_BASE=http://localhost:11434/v1
 embedding_model="openai:nomic-embed-text"
 
-npx -y @arabold/docs-mcp-server@latest scrape "$repo_name" \
-    "file://$MEMORIES_DIR" \
-    --embedding-model "$embedding_model" \
-    --silent >/dev/null 2>&1
+# Check if library already indexed with the same source URL
+existing_url=$(npx -y @arabold/docs-mcp-server@latest list 2>/dev/null \
+    | jq -r --arg name "$repo_name" '.[] | select(.name == $name) | .versions[0].sourceUrl // empty')
+
+if [ "$existing_url" = "file://$MEMORIES_DIR" ]; then
+    npx -y @arabold/docs-mcp-server@latest refresh "$repo_name" \
+        --embedding-model "$embedding_model" \
+        --silent >/dev/null 2>&1
+else
+    npx -y @arabold/docs-mcp-server@latest scrape "$repo_name" \
+        "file://$MEMORIES_DIR" \
+        --embedding-model "$embedding_model" \
+        --silent >/dev/null 2>&1
+fi
 
 # Mark indexing time for subsequent staleness checks
 touch "$TIMESTAMP_FILE"
