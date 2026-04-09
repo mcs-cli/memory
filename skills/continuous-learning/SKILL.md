@@ -3,6 +3,8 @@ name: continuous-learning
 description: >
   Extracts reusable knowledge (debugging discoveries, architectural decisions, conventions)
   from work sessions and saves them as structured memory files in .claude/memories/.
+  Also use when the user asks to "run a retrospective", "extract learnings", or
+  "save what we learned" from the current session.
 allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__docs-mcp-server__search_docs, mcp__docs-mcp-server__list_libraries, AskUserQuestion, TaskCreate, TaskUpdate, TaskList
 ---
 
@@ -10,7 +12,7 @@ allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__docs-mcp-server__s
 
 Extract reusable knowledge from work sessions and save it as memory files in `<project>/.claude/memories/`.
 
-> **Note:** `<project>` refers to the current working directory (project root) throughout this document.
+> **Note:** `<project>` refers to the current working directory (project root) throughout this document. When calling `search_docs`, the library name is the root directory name of the project (e.g., for `/Users/me/dev/my-app`, use `library: "my-app"`).
 
 ## Memory Categories
 
@@ -24,7 +26,7 @@ Knowledge discovered through debugging, investigation, or problem-solving that w
 - Discovered a workaround for a tool/framework limitation
 - Found a workflow optimization through experimentation
 
-**Examples:** `learning_swiftui_task_cancellation_on_view_dismiss`, `learning_core_data_batch_insert_memory_spike`, `learning_xcode_preview_crash_missing_environment`
+**Examples:** `learning_background_task_watchdog_timeout`, `learning_orm_batch_insert_memory_spike`, `learning_ci_cache_invalidation_on_dependency_update`
 
 ### Decisions (`decision_<domain>_<topic>`)
 
@@ -43,12 +45,12 @@ Deliberate choices about how the project should work.
 |--------|----------|
 | `architecture` | `decision_architecture_mvvm_coordinators` |
 | `codestyle` | `decision_codestyle_naming_conventions` |
-| `tooling` | `decision_tooling_swiftlint_config` |
+| `tooling` | `decision_tooling_linter_config` |
 | `testing` | `decision_testing_snapshot_strategy` |
 | `networking` | `decision_networking_retry_policy` |
 | `ui` | `decision_ui_design_system` |
-| `data` | `decision_data_core_data_vs_swiftdata` |
-| `project` | `decision_project_minimum_ios_version` |
+| `data` | `decision_data_orm_selection` |
+| `project` | `decision_project_minimum_platform_version` |
 
 ---
 
@@ -72,7 +74,7 @@ If NO to all → skip. If YES to any → continue.
 mcp__docs-mcp-server__search_docs(library: "<project>", query: "<topic>")
 ```
 
-**Fall back to file listing** if search_docs returns no results:
+**Fall back to file listing** if search_docs returns no results or the project library is not yet indexed:
 
 ```
 Glob(pattern: ".claude/memories/*.md")
@@ -82,20 +84,18 @@ Determine if: update an existing memory, cross-reference related memories, or kn
 
 ### Step 3: Research (When Appropriate)
 
-**For general topics** — use Claude Code's built-in web search:
+**For general topics** — search available documentation sources first (the user may have MCP servers providing official docs for frameworks or libraries), then fall back to web search:
 ```
 WebSearch(query: "<topic> best practices <current year>")
 ```
+
+Research should **enrich** project-specific knowledge, not replace it. The goal is to add context or verify a finding — not to save generic knowledge that any LLM already knows. If the research result is general programming advice without a project-specific angle, skip saving it.
 
 **Skip research for:** project-specific conventions, personal preferences, time-sensitive captures.
 
 ### Step 4: Structure and Save
 
-Read [references/templates.md](references/templates.md) for the full template structures.
-
-**For learnings:** Use the Learning Memory Template (Problem → Trigger Conditions → Solution → Verification → Example → Notes → References).
-
-**For decisions:** Use the ADR-Inspired Template for complex trade-offs, or the Simplified Template for straightforward preferences.
+Read [references/templates.md](references/templates.md) for template structures and staleness rules, then apply the appropriate template.
 
 **Save:**
 ```
@@ -120,16 +120,23 @@ Before saving any memory, verify:
 - [ ] No sensitive information (credentials, internal URLs)
 - [ ] Does not duplicate existing memories
 - [ ] References included if external sources were consulted
+- [ ] No brittle references that rot quickly (see Staleness Prevention below)
+
+---
+
+## Staleness Prevention
+
+Before saving, check memory content against the Staleness Rules in [references/templates.md](references/templates.md). In short: use symbol names instead of line numbers, module-level references instead of deep file paths, and omit transient details like feature flags being removed or in-progress PR numbers.
 
 ---
 
 ## Retrospective Mode
 
-When `/retrospective` is invoked:
+When the user asks to "run a retrospective", "extract learnings from this session", or similar:
 
 1. Review conversation history for extractable knowledge
-2. Search existing memories via `search_docs` (fall back to `Glob(".claude/memories/*.md")` if unavailable)
-3. List candidates with brief justifications
+2. Search existing memories following Step 2 of the Extraction Workflow
+3. List candidates with brief justifications — prioritize by the evaluation criteria in Step 1 (non-obvious investigation, architectural choices, expressed preferences)
 4. Extract top 1-3 highest-value memories
 5. Report what was created and why
 
