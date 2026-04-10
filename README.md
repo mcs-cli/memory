@@ -29,7 +29,7 @@ This pack implements a **closed-loop knowledge system** that captures valuable i
         |                    ^                                          |
         |                    |            .claude/memories/             |
         |                    |     ┌──────────────────────────────┐     |
-        |                    |     │  learning_background_task_... │     |
+        |                    |     │  learning_background_task_.. │     |
         |                    |     │  decision_arch_...           │     |
         |                    +-----│  learning_orm_batch_...      │<----+
         |                          │  decision_testing_...        │
