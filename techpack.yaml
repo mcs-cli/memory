@@ -3,7 +3,7 @@ identifier: memory
 displayName: "Memory"
 description: Persistent memory and knowledge management for Claude Code
 author: Bruno Guidolim
-minMCSVersion: "2026.3.22"
+minMCSVersion: "2026.4.12"
 
 # ---------------------------------------------------------------------------
 # Components
@@ -27,34 +27,43 @@ components:
 
   - id: ollama
     displayName: Ollama
-    description: Local LLM runtime
-    brew: ollama
+    description: Local LLM runtime (compatible with all Apple Silicon)
+    type: configuration
+    shell: "curl -fsSL https://ollama.com/install.sh | sh"
+    shellInteractive: true
+    doctorChecks:
+      - type: commandExists
+        name: "Ollama installed"
+        section: AI Models
+        command: ollama
+        args: ["--version"]
 
   - id: ollama-service
     displayName: Ollama service
-    description: Start Ollama as background service
+    description: Ensure Ollama is running
     type: configuration
     dependencies: [ollama]
-    shell: "brew services start ollama"
+    shell: "open /Applications/Ollama.app --args hidden"
     doctorChecks:
       - type: commandExists
         name: "Ollama service running"
         section: AI Models
         command: curl
         args: ["-sf", "http://localhost:11434/api/tags"]
-        fixCommand: "brew services start ollama"
+        fixCommand: "open /Applications/Ollama.app --args hidden"
 
   - id: ollama-nomic-embed
-    description: Pull nomic-embed-text model for docs-mcp-server embeddings
+    displayName: nomic-embed-text model
+    description: Embedding model for docs-mcp-server
     type: configuration
-    dependencies: [ollama]
+    dependencies: [ollama-service]
     shell: "ollama pull nomic-embed-text"
     doctorChecks:
       - type: commandExists
         name: "nomic-embed-text model"
         section: AI Models
-        command: ollama
-        args: ["show", "nomic-embed-text"]
+        command: curl
+        args: ["-sf", "http://localhost:11434/api/show", "-d", "{\"name\":\"nomic-embed-text\"}"]
 
   # ── MCP Servers ─────────────────────────────────────────────────────────
   - id: docs-mcp-server
