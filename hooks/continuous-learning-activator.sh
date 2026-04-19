@@ -1,15 +1,13 @@
 #!/bin/bash
 
 cat << 'EOF'
-MANDATORY MEMORY — CHECK & EVALUATE
+MANDATORY MEMORY EVALUATION
 
-BEFORE → If this request starts a new sub-task (writing tests,
-refactoring, integrating, deploying, etc.), search the KB
-for relevant patterns and conventions before executing.
+If this starts a new sub-task or phase (tests, refactor, deploy, etc.)
+→ search the KB via search_docs for relevant patterns first.
 
-AFTER  → Evaluate whether this request produced extractable
-knowledge or decisions worth saving to memory.
-Save automatically — do NOT ask the user for permission.
+After completing this request, evaluate whether it produced
+extractable knowledge or decisions worth saving to memory.
 
 LEARNINGS → Non-obvious debugging, workarounds, error resolutions
   Save as: learning_<topic>_<specific>
@@ -17,6 +15,6 @@ LEARNINGS → Non-obvious debugging, workarounds, error resolutions
 DECISIONS → Architecture choices, conventions, preferences, tool selections
   Save as: decision_<domain>_<topic>
 
-When saving → Use Skill(continuous-learning) to extract
-and save to <project>/.claude/memories/
+If YES to either → Use Skill(continuous-learning) to save
+autonomously to <project>/.claude/memories/. Do not ask permission.
 EOF
