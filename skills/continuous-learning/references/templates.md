@@ -7,9 +7,10 @@ to use the appropriate template structure.
 
 These apply to **all** templates below. See the [skill's Capture Rules section](../SKILL.md#capture-rules) for the full rationale.
 
-- **Project-specific or a real gotcha.** Save when the knowledge is tied to *this* codebase, **or** when it's a non-obvious language/framework/tool gotcha the project hit through debugging. Skip when the memory reads like reference docs anyone could have looked up.
+- **Project-specific or a real gotcha.** Save when the knowledge is tied to *this* codebase, **or** when it's a non-obvious language/framework/tool gotcha the project hit through debugging. Skip when the memory duplicates **public** documentation anyone could look up (language reference, public CLI/API docs). Summaries of **internal** docs (Confluence, ADRs, RFCs, wiki) are fine — include the source in `References:` so the memory doesn't drift from the original.
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in commit or PR references that expose authorship. Describe the artifact (the bug, the pattern, the decision), not who touched it. Omit the actor; do not invent a role for them.
 - **Project pattern, not preference.** Every `decision_` needs evidence it's actually a project pattern: consistent use in the codebase, lint/formatter config, docs, or a team agreement (written *or* verbal — Slack / meeting / session consensus count). If the only support is *"I prefer X,"* skip.
+  - *Bad patterns in the code:* one engineer flagging it → `learning_` warning. Team has agreed it's bad → `decision_` (e.g. deprecating or replacing it). The rule doesn't entrench bad code; it just routes the memory to the right category.
 
 ### `Applies to`
 
