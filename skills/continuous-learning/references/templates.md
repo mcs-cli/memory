@@ -3,6 +3,16 @@
 Reference file for the continuous-learning skill. Load this when creating or updating memories
 to use the appropriate template structure.
 
+## Capture Rules
+
+These apply to **all** templates below. See the [skill's Capture Rules section](../SKILL.md#capture-rules) for the full rationale.
+
+- **Project-specific or a real gotcha.** Save when the knowledge is tied to *this* codebase, **or** when it's a non-obvious language/framework/tool gotcha the project hit through debugging. Skip when the memory reads like reference docs anyone could have looked up.
+- **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in commit or PR references that expose authorship. Describe the artifact (the bug, the pattern, the decision), not who touched it. Omit the actor; do not invent a role for them.
+- **Project pattern, not preference.** Every `decision_` needs evidence it's actually a project pattern: consistent use in the codebase, lint/formatter config, docs, or a team agreement (written *or* verbal — Slack / meeting / session consensus count). If the only support is *"I prefer X,"* skip.
+
+---
+
 ## Staleness Rules
 
 These apply to **all** templates below:
@@ -181,7 +191,7 @@ struct UserRepository: UserRepositoryType {
 
 ## Simplified Decision Template
 
-Use for straightforward preferences without complex trade-offs.
+Use for straightforward, evidence-backed decisions without complex trade-offs. The Rationale must point at real evidence the pattern is the project's — **any** of: the codebase already uses it consistently, lint/formatter config enforces it, a style guide or doc describes it, or the team agreed (written or verbal — Slack, meeting, session consensus). If the only support is *"I prefer X,"* do not save.
 
 ```markdown
 # Decision: [concise title]
@@ -190,7 +200,7 @@ Use for straightforward preferences without complex trade-offs.
 [What was decided]
 
 ## Rationale
-[Why this choice]
+[Why this choice — point at the evidence: codebase usage, lint rule, style guide, config, or team agreement]
 
 ## Examples
 [How to apply it]
@@ -202,21 +212,20 @@ Use for straightforward preferences without complex trade-offs.
 # Decision: Use `async let` over `TaskGroup` for fixed-count parallel work
 
 ## Decision
-When running a known, small number of concurrent operations (2-4), prefer `async let` bindings over `TaskGroup`.
+When running a known, small number of concurrent operations (2-4), use `async let` bindings. Reserve `TaskGroup` for dynamic or unbounded task counts.
 
 ## Rationale
-- `async let` reads more naturally and avoids the boilerplate of creating a group, adding tasks, and collecting results
-- Type safety is preserved without casting from `group.next()`
-- `TaskGroup` is the right choice when the number of tasks is dynamic or large
+- Codified in the project's Swift style guide (`docs/style/concurrency.md`) and enforced by the `FixedCountTaskGroup` SwiftLint custom rule.
+- Agreed by the iOS team in the 2025-09 architecture review — the type-safety loss from `group.next()` casting was the deciding factor.
 
 ## Examples
 ```swift
-// Preferred: fixed concurrency with async let
+// Fixed count — use async let
 async let profile = fetchProfile(id)
 async let settings = fetchSettings(id)
 let (p, s) = await (profile, settings)
 
-// Use TaskGroup when count is dynamic
+// Dynamic count — use TaskGroup
 await withTaskGroup(of: Item.self) { group in
     for id in ids {
         group.addTask { await fetchItem(id) }

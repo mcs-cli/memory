@@ -13,6 +13,6 @@ to <project>/.claude/memories/. Do not ask permission.
 LEARNINGS → Non-obvious debugging, workarounds, error resolutions
   Save as: learning_<topic>_<specific>
 
-DECISIONS → Architecture choices, conventions, preferences, tool selections
+DECISIONS → Architecture choices, project conventions, tool selections
   Save as: decision_<domain>_<topic>
 EOF
