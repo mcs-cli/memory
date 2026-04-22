@@ -118,6 +118,8 @@ Research should **enrich** project-specific knowledge, not replace it. The goal 
 
 Read [references/templates.md](references/templates.md) for template structures and staleness rules. For learnings, use the Learning Memory Template. For decisions, use the ADR-Inspired Template for complex trade-offs or the Simplified Template for straightforward, evidence-backed decisions.
 
+**Fill in `Applies to`** at the top of every memory. Default to the current project's root directory name (the same value used as the `library` parameter when calling `search_docs`). If the session made it clear the memory applies to multiple projects, list them comma-separated. This field is informational — it helps semantic search and makes the memory portable if it's later consolidated into a cross-project knowledge base.
+
 **Save:**
 ```
 Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", content: "<structured markdown>")

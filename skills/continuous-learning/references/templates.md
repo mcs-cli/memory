@@ -11,6 +11,16 @@ These apply to **all** templates below. See the [skill's Capture Rules section](
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in commit or PR references that expose authorship. Describe the artifact (the bug, the pattern, the decision), not who touched it. Omit the actor; do not invent a role for them.
 - **Project pattern, not preference.** Every `decision_` needs evidence it's actually a project pattern: consistent use in the codebase, lint/formatter config, docs, or a team agreement (written *or* verbal — Slack / meeting / session consensus count). If the only support is *"I prefer X,"* skip.
 
+### `Applies to`
+
+Every memory starts with an `Applies to:` line declaring which project(s) it targets. Default: the current project's root directory name. For a memory that genuinely holds across several projects (e.g. a team-wide convention spanning web, iOS, and backend), list them comma-separated:
+
+```
+**Applies to:** web-dashboard, ios-app, api-backend
+```
+
+Keep content generic enough to stay true in every listed project. If a memory is only partially relevant to one project, save two separate memories — each scoped to the project it actually applies to — rather than one mixed memory.
+
 ---
 
 ## Staleness Rules
@@ -31,6 +41,8 @@ These apply to **all** templates below:
 
 ```markdown
 # Learning: [concise title]
+
+**Applies to:** [project name — or comma-separated list if the memory applies to several projects]
 
 ## Problem
 [Clear description of the problem]
@@ -58,6 +70,8 @@ These apply to **all** templates below:
 
 ````markdown
 # Learning: Background task completion handler must be called before suspension
+
+**Applies to:** my-ios-app
 
 ## Problem
 App crashes with `0x8badf00d` (watchdog timeout) when a background network request finishes but the completion handler from `beginBackgroundTask` is never called.
@@ -110,6 +124,8 @@ Use for architectural decisions, tool choices, or patterns with meaningful trade
 ```markdown
 # Decision: [concise title]
 
+**Applies to:** [project name — or comma-separated list if the decision applies to several projects]
+
 ## Decision
 [One-sentence summary of what was decided]
 
@@ -140,6 +156,8 @@ Use for architectural decisions, tool choices, or patterns with meaningful trade
 
 ````markdown
 # Decision: Repository pattern for data access layer
+
+**Applies to:** my-ios-app
 
 ## Decision
 All data access (network, local storage, cache) goes through Repository types that expose Combine publishers or async methods — view models never call API clients or databases directly.
@@ -196,6 +214,8 @@ Use for straightforward, evidence-backed decisions without complex trade-offs. T
 ```markdown
 # Decision: [concise title]
 
+**Applies to:** [project name — or comma-separated list if the decision applies to several projects]
+
 ## Decision
 [What was decided]
 
@@ -211,12 +231,14 @@ Use for straightforward, evidence-backed decisions without complex trade-offs. T
 ````markdown
 # Decision: Use `async let` over `TaskGroup` for fixed-count parallel work
 
+**Applies to:** my-ios-app
+
 ## Decision
 When running a known, small number of concurrent operations (2-4), use `async let` bindings. Reserve `TaskGroup` for dynamic or unbounded task counts.
 
 ## Rationale
-- Codified in the project's Swift style guide (`docs/style/concurrency.md`) and enforced by the `FixedCountTaskGroup` SwiftLint custom rule.
-- Agreed by the iOS team in the 2025-09 architecture review — the type-safety loss from `group.next()` casting was the deciding factor.
+- The codebase already uses `async let` consistently for fixed-count concurrency; new code should follow suit.
+- Agreed by the iOS team in an architecture review — the type-safety loss from `group.next()` casting was the deciding factor.
 
 ## Examples
 ```swift

@@ -16,6 +16,8 @@ Over time, memory files accumulate — some become stale, some duplicate each ot
 
 > **Rule alignment.** The audit uses the same three Capture Rules as the [continuous-learning skill](../continuous-learning/SKILL.md#capture-rules): project-specific, anonymous, project-pattern-not-personal-preference. Existing memories that violate any of them are candidates for UPDATE or DROP — see criteria 1, 8, and 9 below.
 
+> **`Applies to` field is informational.** Memories carry an `Applies to:` line declaring which project(s) they target. Use it as context, but audit only the memories in the current project's `.claude/memories/` — fact-check against this project only, and never DROP a memory solely because its `Applies to` lists other projects. If the KB is centralized across projects via a separate mechanism (e.g. a shared-memories techpack), that mechanism owns its own audit — this skill does not reach across repos.
+
 > **This skill is user-initiated only.** Never run it automatically or as part of another workflow.
 
 ---
@@ -27,7 +29,8 @@ Evaluate each memory against these dimensions:
 ### 1. Relevance
 - Does this memory apply to the **current state** of the project?
 - Has the underlying code, API, or framework changed since it was written?
-- **Documentation vs. discovery.** Flag as DROP when the memory reads like reference docs for an external tool, CLI, language feature, framework, library, editor, shell, or public API — knowledge any capable LLM already has without reading this KB. KEEP language/framework *gotchas* — non-obvious behavior the project discovered through debugging — even when the root cause is generic. The test: could a reader have found this by reading the official docs? If yes → DROP. If the memory captures a surprise, a footgun, or an interaction that isn't spelled out in the docs → KEEP.
+- **Project-specific vs. generic.** KEEP memories meaningfully tied to this repository — its codepaths, architecture, build/deploy setup, test strategy, tooling choices, team workflow, or recurring implementation patterns. DROP generic best practices, generic style advice, or broadly applicable how-to guidance that could fit almost any project.
+- **Documentation vs. discovery.** Separately, DROP memories that read like reference docs for an external tool, CLI, language feature, framework, library, editor, shell, or public API — knowledge any capable LLM already has without reading this KB. **Exception — KEEP** language/framework *gotchas*: non-obvious behavior the project discovered through debugging, even when the root cause is generic. The test: could a reader have found this by reading the official docs? If yes → DROP. If the memory captures a surprise, a footgun, or an interaction that isn't spelled out in the docs → KEEP.
 
 ### 2. Actionability
 - Can a future session **act on** this memory to avoid a mistake or follow a convention?
