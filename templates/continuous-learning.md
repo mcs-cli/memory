@@ -17,3 +17,14 @@ Search the KB again **before starting** whenever the work shifts to a new phase,
 - **New integration** — check for conventions on networking, data layer, etc.
 
 Past sessions often contain decisions and patterns that prevent unnecessary iterations and PR comments.
+
+## Referencing memories in shared artifacts
+
+Memory files are a project-internal KB — filenames drift as files are renamed or merged, and not all readers have repo access. **Never cite memory filenames** in commits, PR descriptions, issue trackers, chat, code comments, docstrings, or release notes — whether or not `.claude/memories/` is tracked in git.
+
+**Summarize the conclusion, don't paste it.** Give the reader the one sentence they need — the trigger, constraint, or choice — sized to the artifact (one line for a commit or code comment; one paragraph for a PR description). If the "why" won't fit, describe the outcome and skip it.
+
+- Bad: `See learning_orm_batch_insert_memory_spike.md`
+- Good: `Batches > 500 rows trigger an ORM memory spike — chunk in 250s.`
+
+Memory-to-memory links inside `.claude/memories/` (`Related:`, `References:`) are fine — internal graph, not an external surface.

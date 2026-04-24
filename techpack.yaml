@@ -159,8 +159,6 @@ components:
     displayName: Global gitignore
     description: Ignores memory files from version control
     gitignore:
-      - "*.local.*"
-      - ".claude/memories"
       - ".claude/.memories-last-indexed"
 
 # ---------------------------------------------------------------------------
