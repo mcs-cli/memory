@@ -94,7 +94,7 @@ If the directory is missing or empty, report the situation (specify whether it d
 
 ### Step 2: Batch Assessment
 
-Read memories in batches (5-8 at a time) and produce a verdict table for each batch:
+Read memories in batches (10-15 at a time) and produce a verdict table for each batch:
 
 ```
 | # | File | Verdict | Rationale |
@@ -161,4 +161,4 @@ Knowledge base reduced from 42 → 34 files.
 - **Never delete without explicit user approval.** Always present the verdict and wait.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
 - **Be conservative with DROP.** When in doubt between KEEP and DROP, lean toward KEEP. A slightly redundant memory is better than losing hard-won knowledge.
-- **Batch size matters.** 5-8 per batch keeps the review manageable.
+- **Batch size matters.** 10-15 per batch keeps the review manageable.
