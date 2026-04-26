@@ -12,7 +12,7 @@ allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__docs-mcp-server__s
 
 Extract reusable knowledge from work sessions and save it as memory files in `<project>/.claude/memories/`.
 
-> **Note:** `<project>` refers to the current working directory (project root) throughout this document. When calling `search_docs`, the library name is the root directory name of the project (e.g., for `/Users/me/dev/my-app`, use `library: "my-app"`).
+> **Note:** `<project>` refers to the current working directory (project root) throughout this document. When calling `search_docs`, the `library:` parameter is the root directory name (e.g., for `/Users/me/dev/my-app`, use `library: "my-app"`) — this is set automatically by the indexing hook and stays folder-based. The `Applies to:` field inside memory content is **different**: it identifies the repo, not the local checkout, so it survives clones into different folder names. See [Step 4](#step-4-structure-and-save).
 
 ## Memory Categories
 
@@ -123,9 +123,9 @@ Research should **enrich** project-specific knowledge, not replace it. The goal 
 
 ### Step 4: Structure and Save
 
-Read [references/templates.md](references/templates.md) for template structures and staleness rules. For learnings, use the Learning Memory Template. For decisions, use the ADR-Inspired Template for complex trade-offs or the Simplified Template for straightforward, evidence-backed decisions.
+Read [references/templates.md](references/templates.md) for template structures. For learnings, use the Learning Memory Template. For decisions, use the ADR-Inspired Template for complex trade-offs or the Simplified Template for straightforward, evidence-backed decisions.
 
-**Fill in `Applies to`** at the top of every memory. Default to the current project's root directory name (the same value used as the `library` parameter when calling `search_docs`). If the session made it clear the memory applies to multiple projects, list them comma-separated. This field is informational — it helps semantic search and makes the memory portable if it's later consolidated into a cross-project knowledge base.
+**Fill in `Applies to`** at the top of every memory. Default to the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:mcs-cli/memory.git` → `memory`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones (`~/dev/memory` vs `~/work/mcs-memory`) while the repo name is stable; this is also why `Applies to:` may differ from the `library:` parameter used for `search_docs`. If the session made it clear the memory applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); keep the content generic enough to stay true in every listed project, and if a memory is only partially relevant to one, save two separate memories instead of one mixed memory. This field is informational — it helps semantic search and makes the memory portable if it's later consolidated into a cross-project knowledge base.
 
 **Pre-save identifier scan (mandatory).** Before `Write`, scan the drafted content for personal identifiers. Look for `@` characters (handles, emails), `<word>/<TICKET>-` and `<word>/<ticket>-description` branch-name shapes, `<word>@<word>` email shapes, and any first-name-looking tokens in examples, commit references, or narration. Any hit → rewrite to describe the artifact (the bug, pattern, decision) without the actor, or skip the save. This is a mechanical grep step, not a vibe check — the Quality Gates checkbox is not enough on its own.
 
@@ -184,7 +184,15 @@ When the underlying knowledge *is* salvageable, rewrite before saving — or ski
 
 ## Staleness Prevention
 
-Before saving, check memory content against the Staleness Rules in [references/templates.md](references/templates.md). In short: use symbol names instead of line numbers, module-level references instead of deep file paths, and omit transient details like feature flags being removed or in-progress PR numbers.
+Before saving, check memory content against these rules:
+
+- **No line numbers.** Reference symbols (types, functions, methods) instead — they survive refactors.
+- **Prefer module-level paths** over deep file paths. Use full paths only for stable, well-known files.
+- **Use semantic anchors** — method signatures, protocol names, and architectural concepts are durable.
+- **Omit transient details** — feature flags being removed, in-progress PR numbers, temporary workarounds.
+
+**Good:** `SessionManager.refreshToken(forceExpiry:)` in the `Auth` module
+**Bad:** `SessionManager.swift:142` at `Sources/Features/Auth/Session/SessionManager.swift`
 
 ---
 

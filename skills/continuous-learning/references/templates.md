@@ -1,42 +1,6 @@
 # Memory Templates & Examples
 
-Reference file for the continuous-learning skill. Load this when creating or updating memories
-to use the appropriate template structure.
-
-## Capture Rules
-
-These apply to **all** templates below. See the [skill's Capture Rules section](../SKILL.md#capture-rules) for the full rationale.
-
-- **Tied to at least one project.** Save when the knowledge is about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project captures are fine — list the repos comma-separated when the same convention genuinely holds across them. Skip when the memory is free-floating language/framework/CLI knowledge with no project anchor, or when it duplicates **public** documentation anyone could look up (language reference, public CLI/API docs). Summaries of **internal** docs (Confluence, ADRs, RFCs, wiki) are fine — include the source in `References:` so the memory doesn't drift from the original.
-- **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in commit or PR references that expose authorship. Describe the artifact (the bug, the pattern, the decision), not who touched it. Omit the actor; do not invent a role for them.
-- **Project pattern, not preference.** Every `decision_` needs evidence it's actually a project pattern: consistent use in the codebase, lint/formatter config, docs, or a team agreement (written *or* verbal — Slack / meeting / session consensus count). If the only support is *"I prefer X,"* skip.
-  - *Bad patterns in the code:* one engineer flagging it → `learning_` warning (only when it has trigger / symptom / workaround shape). Team has agreed it's bad → `decision_` (e.g. deprecating or replacing it). Pure "should be refactored someday" observations belong in the issue tracker, not the KB.
-
-### `Applies to`
-
-Every memory starts with an `Applies to:` line declaring which project(s) it targets. Default: the current project's root directory name. For a memory that genuinely holds across several projects (e.g. a team-wide convention spanning web, iOS, and backend), list them comma-separated:
-
-```
-**Applies to:** web-dashboard, ios-app, api-backend
-```
-
-Keep content generic enough to stay true in every listed project. If a memory is only partially relevant to one project, save two separate memories — each scoped to the project it actually applies to — rather than one mixed memory.
-
----
-
-## Staleness Rules
-
-These apply to **all** templates below:
-
-- **No line numbers.** Reference symbols (types, functions, methods) instead — they survive refactors.
-- **Prefer module-level paths** over deep file paths. Use full paths only for stable, well-known files.
-- **Use semantic anchors** — method signatures, protocol names, and architectural concepts are durable.
-- **Omit transient details** — feature flags being removed, in-progress PR numbers, temporary workarounds.
-
-**Good:** `SessionManager.refreshToken(forceExpiry:)` in the `Auth` module
-**Bad:** `SessionManager.swift:142` at `Sources/Features/Auth/Session/SessionManager.swift`
-
----
+Template structures for the continuous-learning skill. Load this when creating or updating memories. Capture Rules, `Applies to:` derivation, and Staleness rules live in [SKILL.md](../SKILL.md) — this file is templates only.
 
 ## Learning Memory Template
 

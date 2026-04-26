@@ -10,13 +10,13 @@ allowed-tools: Read, Glob, Grep, Edit, Bash, Write, mcp__docs-mcp-server__search
 
 # Memory Audit Skill
 
-Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` refers to the current working directory. When calling `search_docs`, the library name is the root directory name of the project.
+Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` refers to the current working directory. When calling `search_docs`, the `library:` parameter is the root directory name (folder-based, set automatically by the indexing hook). When matching memories' `Applies to:` against "the current project," compare instead against the **git repo name** (last path segment of `git remote get-url origin`, `.git` stripped) — that is the stable identifier that travels with the file across clones.
 
 Over time, memory files accumulate — some become stale, some duplicate each other, some capture generic knowledge that doesn't belong in a project-specific KB. This skill walks through every memory with the user, recommending **KEEP**, **DROP**, or **UPDATE** with clear rationale, and only acts on user-approved changes.
 
 > **Rule alignment.** The audit uses the same three Capture Rules as the [continuous-learning skill](../continuous-learning/SKILL.md#capture-rules): tied to at least one project, anonymous, project-pattern-not-personal-preference. Existing memories that violate any of them are candidates for UPDATE or DROP — see criteria 1, 8, and 9 below.
 
-> **`Applies to` field is informational.** Memories carry an `Applies to:` line declaring which project(s) they target. Use it as context, but audit only the memories in the current project's `.claude/memories/` — fact-check against this project only, and never DROP a memory solely because its `Applies to` lists other projects. If the KB is centralized across projects via a separate mechanism (e.g. a shared-memories techpack), that mechanism owns its own audit — this skill does not reach across repos.
+> **`Applies to` field is informational.** Memories carry an `Applies to:` line declaring which project(s) they target. Use it as context, but audit only the memories in the current checkout's `.claude/memories/` — fact-check against this project only. When deciding whether a memory targets *this* project, compare its `Applies to:` against the **git repo name**, not the directory basename — a folder rename does not change the project. Never DROP a memory solely because its `Applies to:` lists other projects. If the KB is centralized across projects via a separate mechanism (e.g. a shared-memories techpack), that mechanism owns its own audit — this skill does not reach across repos.
 
 > **This skill is user-initiated only.** Never run it automatically or as part of another workflow.
 
