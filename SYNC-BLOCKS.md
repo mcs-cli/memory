@@ -69,14 +69,22 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 
 ```sh
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 A=skills/continuous-learning/SKILL.md
 B=skills/memory-audit/SKILL.md
+fail=0
 for tag in capture-rules strip-the-anchors applies-to; do
-  diff -u \
-    <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$A") \
-    <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$B") \
-    || { echo "DRIFT in $tag"; exit 1; }
+  echo "=== $tag ==="
+  if diff -u \
+      <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$A") \
+      <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$B"); then
+    echo "OK: identical"
+  else
+    echo "DRIFT in $tag"
+    fail=1
+  fi
 done
-echo "all sync blocks identical"
+exit "$fail"
 ```
+
+The script reports every drifted block in one pass — same behaviour as the CI workflow, so a maintainer's local run and a PR check produce the same output.
