@@ -90,7 +90,7 @@ If NO to all → skip. Otherwise continue to Stage B.
 
 1. **Rule 1 (project-tied)** — apply Step 4 Check 1 (strip-the-anchors).
 2. **Rule 2 (anonymous)** — apply Step 4 Check 2 (identifier scan).
-3. **Rule 3 (pattern, not preference)** — verify by codebase usage, lint/formatter config, style guide, or recorded team agreement.
+3. **Rule 3 (pattern, not preference)** — verify by codebase usage, lint/formatter config, style guide, or team agreement (written or verbal — see the synced rule for the full list of valid evidence).
 
 If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, replace tool-only substance with the actual project anchor) or skip. Do not save partial-fit memories.
 
