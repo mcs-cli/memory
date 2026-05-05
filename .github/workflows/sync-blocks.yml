@@ -1,0 +1,66 @@
+name: sync-blocks
+
+on:
+  pull_request:
+    paths:
+      - "skills/continuous-learning/SKILL.md"
+      - "skills/memory-audit/SKILL.md"
+      - "SYNC-BLOCKS.md"
+      - ".github/workflows/sync-blocks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/continuous-learning/SKILL.md"
+      - "skills/memory-audit/SKILL.md"
+      - "SYNC-BLOCKS.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-blocks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify SYNC blocks exist and agree across both skills + SYNC-BLOCKS.md
+        run: |
+          set -uo pipefail
+          A=skills/continuous-learning/SKILL.md
+          B=skills/memory-audit/SKILL.md
+          C=SYNC-BLOCKS.md
+          overall=0
+          for tag in capture-rules strip-the-anchors applies-to; do
+            echo "=== $tag ==="
+            tag_fail=0
+            for f in "$A" "$B" "$C"; do
+              if [ -z "$(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$f")" ]; then
+                echo "MISSING: block '$tag' not found in $f"
+                tag_fail=1
+              fi
+            done
+            if [ "$tag_fail" -eq 0 ]; then
+              for ref in "$B" "$C"; do
+                if ! diff -u --label "$A" --label "$ref" \
+                    <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$A") \
+                    <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$ref"); then
+                  echo "DRIFT between $A and $ref for tag '$tag'"
+                  tag_fail=1
+                fi
+              done
+            fi
+            if [ "$tag_fail" -eq 0 ]; then
+              echo "OK: identical across all three files"
+            else
+              overall=1
+            fi
+          done
+          if [ "$overall" -ne 0 ]; then
+            echo
+            echo "One or more SYNC blocks drifted or went missing. Update SYNC-BLOCKS.md and copy the canonical text into both skills."
+            exit 1
+          fi
