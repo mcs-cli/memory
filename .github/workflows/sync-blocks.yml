@@ -1,0 +1,44 @@
+name: sync-blocks
+
+on:
+  pull_request:
+    paths:
+      - "skills/continuous-learning/SKILL.md"
+      - "skills/memory-audit/SKILL.md"
+      - "SYNC-BLOCKS.md"
+      - ".github/workflows/sync-blocks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "skills/continuous-learning/SKILL.md"
+      - "skills/memory-audit/SKILL.md"
+      - "SYNC-BLOCKS.md"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify SYNC blocks are byte-identical across both skills
+        run: |
+          set -euo pipefail
+          A=skills/continuous-learning/SKILL.md
+          B=skills/memory-audit/SKILL.md
+          fail=0
+          for tag in capture-rules strip-the-anchors applies-to; do
+            echo "=== $tag ==="
+            if diff -u \
+                <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$A") \
+                <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$B"); then
+              echo "OK: identical"
+            else
+              echo "DRIFT in $tag"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "One or more SYNC blocks have drifted. Update SYNC-BLOCKS.md and copy the canonical text into both skills."
+            exit 1
+          fi
