@@ -150,13 +150,23 @@ brew install mcs-cli/tap/mcs
 
 # 2. Register this tech pack
 mcs pack add mcs-cli/memory
+```
 
-# 3. Sync your project
-cd ~/Developer/my-project
-mcs sync
+**Recommended: install globally.** This pack has no project-specific config — installing once at the global scope makes the memory system available in every project automatically, with no per-repo setup.
+
+```bash
+# 3. Sync to global scope (~/.claude/)
+mcs sync --global
 
 # 4. Verify everything is healthy
 mcs doctor
+```
+
+**Alternative: per-project.** If you'd rather scope the pack to a single repo (e.g. to try it out, or to keep it off other projects):
+
+```bash
+cd ~/Developer/my-project
+mcs sync
 ```
 
 ---
