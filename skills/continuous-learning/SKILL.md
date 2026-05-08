@@ -13,7 +13,7 @@ allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__docs-mcp-server__s
 
 Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a `CLAUDE.local.md` section, public documentation → skip. The skill is the **only** path to `memories/` — never `Write` there directly. Suggesting `CLAUDE.local.md` is a successful outcome, not a failure.
 
-> **Note:** `<project>` refers to the current working directory (project root) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the `### Applies to` subsection in [Step 4](#step-4-route-and-save).
+> **Note:** `<project>` refers to the current working directory (project root) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
 
 ## Memory Categories
 
@@ -82,9 +82,9 @@ After completing any task, evaluate in two stages.
 - Did this require non-obvious investigation or debugging?
 - Was a choice made about architecture, patterns, or approach?
 - Is there an established project convention worth documenting?
-- Without this, would someone make a different decision in the project?
+- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the code, `git log`, lint, or the formatter already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
 
-If NO to all → skip. Otherwise continue to Stage B.
+If the forcing-function gate fails, or no other prompt answers yes → skip. Otherwise continue to Stage B.
 
 **Stage B — Apply the three Capture Rules above as hard gates. All three must pass.** Enforcement maps:
 
@@ -133,10 +133,10 @@ Read [references/templates.md](references/templates.md) for template structures.
 
 #### Applies to
 
-Fill in `Applies to:` at the top of every memory.
+Fill in `Applies to:` directly under the title heading of every memory.
 
 <!-- SYNC:applies-to -->
-**The `Applies to:` field.** The first line of every memory declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the `library:` parameter used for `search_docs`, which is folder-based and set automatically by the indexing hook.
+**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the `library:` parameter used for `search_docs`, which is folder-based and set automatically by the indexing hook.
 
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->
@@ -267,5 +267,5 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 | `Read` | Read a specific memory file |
 | `Write` | Create new memory file |
 | `Edit` | Update existing memory file |
-| `Bash` | Remove outdated memory file (`rm`) |
+| `Bash` | Resolve git repo name for `Applies to:` (`git remote get-url origin`) |
 | `WebSearch` | Built-in web search for general topics |
