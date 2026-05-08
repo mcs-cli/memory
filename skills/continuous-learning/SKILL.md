@@ -13,7 +13,7 @@ allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__docs-mcp-server__s
 
 Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a `CLAUDE.local.md` section, public documentation → skip. The skill is the **only** path to `memories/` — never `Write` there directly. Suggesting `CLAUDE.local.md` is a successful outcome, not a failure.
 
-> **Note:** `<project>` refers to the current working directory (project root) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the `#### Applies to` subsection in [Step 4](#step-4-route-and-save).
+> **Note:** `<project>` refers to the current working directory (project root) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
 
 ## Memory Categories
 
