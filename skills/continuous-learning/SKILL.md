@@ -133,10 +133,10 @@ Read [references/templates.md](references/templates.md) for template structures.
 
 #### Applies to
 
-Fill in `Applies to:` at the top of every memory.
+Fill in `Applies to:` directly under the title heading of every memory.
 
 <!-- SYNC:applies-to -->
-**The `Applies to:` field.** The first line of every memory declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the `library:` parameter used for `search_docs`, which is folder-based and set automatically by the indexing hook.
+**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the `library:` parameter used for `search_docs`, which is folder-based and set automatically by the indexing hook.
 
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->
