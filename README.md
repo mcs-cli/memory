@@ -6,7 +6,7 @@ Built for the [`mcs`](https://github.com/mcs-cli/mcs) configuration engine.
 
 ```
 identifier: memory
-requires:   mcs >= 2026.3.22
+requires:   mcs >= 2026.4.12
 ```
 
 ---
