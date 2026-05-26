@@ -98,9 +98,6 @@ components:
         OPENAI_API_KEY: "ollama"
         OPENAI_API_BASE: "http://localhost:11434/v1"
         DOCS_MCP_EMBEDDING_MODEL: "openai:nomic-embed-text"
-        DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_MODE: "unrestricted"
-        DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_INCLUDE_HIDDEN: "true"
-        DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_FOLLOW_SYMLINKS: "true"
 
   # ── Skills ──────────────────────────────────────────────────────────────
   - id: skill-continuous-learning
