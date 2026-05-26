@@ -35,6 +35,9 @@ repo_name=$(basename "$project_root")
 
 export OPENAI_API_KEY=ollama
 export OPENAI_API_BASE=http://localhost:11434/v1
+export DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_MODE=unrestricted
+export DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_INCLUDE_HIDDEN=true
+export DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_FOLLOW_SYMLINKS=true
 embedding_model="openai:nomic-embed-text"
 
 # Check if library already indexed with the same source URL
