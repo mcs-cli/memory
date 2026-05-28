@@ -10,9 +10,10 @@ Only after completing these steps should you proceed with discovery and implemen
 ### When to re-check mid-session
 
 Search the KB again **before starting** whenever the work shifts to a new phase, including but not limited to:
+- **Debugging an unexpected failure** — search by topic/domain, not the literal error message; code you can't directly read (generated mocks, codegen output) is the highest-value case to check.
 - **Writing or updating tests** — check for testing conventions, patterns, preferred frameworks
 - **Refactoring** — check for architectural decisions and code style preferences
-- **Error handling / validation** — check for established patterns
+- **Error-handling code / validation** — check for established patterns
 - **CI/CD or deployment** — check for workflow decisions
 - **New integration** — check for conventions on networking, data layer, etc.
 
