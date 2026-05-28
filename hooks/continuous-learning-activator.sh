@@ -6,6 +6,9 @@ MANDATORY MEMORY PROTOCOL
 If this starts a new sub-task or phase (tests, refactor, deploy, etc.)
 → search the KB via search_docs for relevant patterns first.
 
+If you hit an unexpected error or are about to debug/diagnose
+→ search the KB FIRST, before reasoning from scratch.
+
 If this request produced reusable knowledge worth preserving, invoke
 Skill(continuous-learning) — the skill evaluates and routes the knowledge
 to the correct destination (.claude/memories/ for codebase knowledge,
