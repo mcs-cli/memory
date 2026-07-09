@@ -1,8 +1,6 @@
 # Memory
 
-A [tech pack](https://github.com/mcs-cli/mcs) that gives Claude Code **persistent memory across sessions** — capturing debugging discoveries, architectural decisions, and project conventions into a searchable knowledge base that makes Claude increasingly effective over time.
-
-Built for the [`mcs`](https://github.com/mcs-cli/mcs) configuration engine.
+A [tech pack](https://github.com/mcs-cli/mcs) that gives Claude Code **persistent memory across sessions** (formerly "Continuous Learning"). Claude Code forgets everything the moment a session ends — this pack captures debugging discoveries, architectural decisions, and project conventions into a searchable knowledge base, so Claude gets increasingly effective at *your* codebase instead of starting from zero every time.
 
 ```
 identifier: memory
@@ -11,199 +9,87 @@ requires:   mcs >= 2026.4.12
 
 ---
 
-## The Problem
-
-Claude Code has no memory between sessions. Every conversation starts from zero — solutions discovered yesterday, architecture decisions made last week, debugging breakthroughs from last month — all gone. You end up re-explaining the same context, re-discovering the same workarounds, and re-making the same decisions.
-
-## The Solution
-
-This pack implements a **closed-loop knowledge system** that captures valuable insights during work and resurfaces them automatically when they're relevant again.
-
-```
-                              CONTINUOUS LEARNING LOOP
-
- ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
- │   SESSION    │     │  KNOWLEDGE   │     │     WORK     │     │   CAPTURE    │
- │    START     │────>│  RETRIEVAL   │────>│   SESSION    │────>│   (save)     │
- └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-        |                    ^                                          |
-        |                    |            .claude/memories/             |
-        |                    |     ┌──────────────────────────────┐     |
-        |                    |     │  learning_background_task_.. │     |
-        |                    |     │  decision_arch_...           │     |
-        |                    +-----│  learning_orm_batch_...      │<----+
-        |                          │  decision_testing_...        │
-        |                          └──────────────────────────────┘
-        |                                        ^
-        |                                        |
-        |               ┌──────────────────────────────────┐
-        |               │       Ollama Embeddings          │
-        +──────────────>│       (nomic-embed-text)         │
-         background     │       + Semantic Index           │
-         re-index on    └──────────────────────────────────┘
-         session start
-```
-
----
-
-## How It Works
-
-### The Four Pieces
-
-| Piece | What | How |
-|-------|------|-----|
-| **Activator Hook** | Triggers evaluation after every prompt | A `UserPromptSubmit` hook reminds Claude to check if the current task produced extractable knowledge |
-| **Continuous Learning Skill** | Structures and saves knowledge | A Claude Code skill with extraction rules, quality gates, naming conventions, and ADR-inspired templates |
-| **Memory Files** | Persistent storage | Structured markdown files in `.claude/memories/` — version-controlled, human-readable, editable |
-| **Semantic Search** | Retrieval at session start | `docs-mcp-server` + Ollama embeddings index memory files and serve them via natural-language search |
-
-### The Feedback Loop
-
-1. **Session starts** — the Ollama status hook detects `.claude/memories/` and re-indexes all memory files into a vector store using `nomic-embed-text` embeddings (runs in the background, doesn't block the session)
-
-2. **Before any task** — a `CLAUDE.local.md` instruction tells Claude to search the knowledge base first (`search_docs` with the project name), surfacing relevant past learnings and decisions
-
-3. **During work** — the activator hook fires on every prompt, reminding Claude to evaluate whether the current interaction produced knowledge worth saving
-
-4. **After valuable work** — the continuous learning skill extracts structured memories, checks for duplicates against the existing KB, and writes them to `.claude/memories/`
-
-5. **Next session** — the new memories are indexed, and the loop continues
-
-Over time, the project accumulates a searchable knowledge base that makes Claude increasingly effective — debugging patterns don't need to be rediscovered, architectural decisions don't need to be re-justified, and conventions don't need to be re-explained.
-
----
-
-## Memory Types
-
-The system captures two categories of knowledge:
-
-**Learnings** — non-obvious discoveries from debugging and investigation:
-```
-.claude/memories/learning_background_task_watchdog_timeout.md
-.claude/memories/learning_orm_batch_insert_memory_spike.md
-.claude/memories/learning_ci_cache_invalidation_on_dependency_update.md
-```
-
-Each learning follows a structured template: **Problem > Trigger Conditions > Solution > Verification > Example > Notes > References**.
-
-**Decisions** — deliberate architectural and convention choices:
-```
-.claude/memories/decision_architecture_mvvm_coordinators.md
-.claude/memories/decision_testing_snapshot_strategy.md
-.claude/memories/decision_codestyle_naming_conventions.md
-```
-
-Decisions use an ADR-inspired template: **Decision > Context > Options Considered > Choice > Consequences > Scope > Examples**.
-
----
-
-## What's Included
-
-### MCP Servers
-
-| Server | Description |
-|--------|-------------|
-| **docs-mcp-server** | Semantic search over project memories using local Ollama embeddings |
-
-### Skills
-
-| Skill | Description |
-|-------|-------------|
-| **continuous-learning** | Extracts learnings and decisions from sessions into structured memory files |
-| **memory-audit** | Reviews and audits memories to keep the knowledge base lean and valuable |
-
-### Session Hooks
-
-| Hook | Event | What It Does |
-|------|-------|-------------|
-| **sync-memories.sh** | `SessionStart` | Checks Ollama health and syncs docs-mcp-server library on session start |
-| **sync-memories.sh** | `UserPromptSubmit` | Reindexes docs-mcp-server library when memories have changed mid-session |
-| **continuous-learning-activator.sh** | `UserPromptSubmit` | Reminds Claude to evaluate knowledge extraction after each prompt |
-
-### Templates (CLAUDE.local.md)
-
-| Section | Instructions |
-|---------|-------------|
-| **continuous-learning** | Always search the KB before starting any task |
-
-### Settings
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `autoMemoryEnabled` | `false` | Disables built-in memory in favor of the continuous learning system |
-
----
-
-## Installation
-
-### Prerequisites
-
-- macOS (Apple Silicon or Intel)
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
-- [Ollama](https://ollama.com) — local LLM runtime for embeddings
-
-### Setup
+## Install
 
 ```bash
-# 1. Install mcs
-brew install mcs-cli/tap/mcs
-
-# 2. Register this tech pack
-mcs pack add mcs-cli/memory
+brew install mcs-cli/tap/mcs      # 1. install mcs
+mcs pack add mcs-cli/memory       # 2. register this pack
+mcs sync --global                 # 3. install globally (~/.claude)
+mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Recommended: install globally.** This pack has no project-specific config — installing once at the global scope makes the memory system available in every project automatically, with no per-repo setup.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Ollama](https://ollama.com) (local embeddings runtime). `mcs` installs the rest (Node, `gh`, `jq`) automatically.
 
-```bash
-# 3. Sync to global scope (~/.claude/)
-mcs sync --global
-
-# 4. Verify everything is healthy
-mcs doctor
-```
-
-**Alternative: per-project.** If you'd rather scope the pack to a single repo (e.g. to try it out, or to keep it off other projects):
-
-```bash
-cd ~/Developer/my-project
-mcs sync
-```
+Global is the recommended scope — this pack has no per-project config, so installing once makes memory available in every project automatically. To scope it to a single repo instead, run `mcs sync` from inside that repo.
 
 ---
 
-## Directory Structure
+## How it works
+
+```mermaid
+flowchart LR
+    A[Session start] --> B[Search the KB]
+    B --> C[Work session]
+    C --> D[Capture learnings & decisions]
+    D --> E[(.claude/memories/)]
+    E --> F["Ollama embeddings<br/>semantic index"]
+    F -. re-index on session start / change .-> B
+```
+
+1. **Session starts** — a hook re-indexes `.claude/memories/` into a local vector store (Ollama `nomic-embed-text`), in the background.
+2. **Before any task** — Claude is instructed to search the knowledge base first, surfacing relevant past learnings and decisions.
+3. **During work** — a prompt-submit hook reminds Claude to notice when the current interaction produces knowledge worth saving.
+4. **After valuable work** — the `continuous-learning` skill extracts structured memories, checks for duplicates, and writes them to `.claude/memories/`.
+5. **Next session** — the new memories are indexed and surfaced again. The loop compounds: debugging patterns aren't rediscovered, decisions aren't re-litigated, conventions aren't re-explained.
+
+---
+
+## What's included
+
+| Component | What it does |
+|---|---|
+| **docs-mcp-server** (MCP) | Read-only semantic search over `.claude/memories/`, backed by local Ollama embeddings |
+| **continuous-learning** (skill) | Extracts learnings and decisions from a session into structured memory files |
+| **memory-audit** (skill) | Reviews existing memories and flags stale or duplicate entries to keep the KB lean |
+| **sync-memories.sh** (hook) | Indexes/re-indexes memories on session start and when they change mid-session |
+| **continuous-learning-activator.sh** (hook) | Reminds Claude to check for extractable knowledge after each prompt |
+| `autoMemoryEnabled: false` (setting) | Disables Claude Code's built-in memory in favor of this system |
+
+Memories come in two flavors, both stored as version-controlled, human-readable markdown:
+
+- **Learnings** — non-obvious discoveries from debugging, e.g. `learning_orm_batch_insert_memory_spike.md`. Template: *Problem → Trigger Conditions → Solution → Verification → Example → Notes*.
+- **Decisions** — deliberate architecture/convention choices, e.g. `decision_testing_snapshot_strategy.md`. ADR-inspired template: *Decision → Context → Options Considered → Choice → Consequences*.
+
+---
+
+## Directory structure
 
 ```
 memory/
-├── techpack.yaml                       # Manifest — defines all components
-├── config/
-│   └── settings.json                   # Disables built-in auto-memory (autoMemoryEnabled)
+├── techpack.yaml                        # Manifest — defines all components
+├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
-│   ├── sync-memories.sh                # Ollama health + memory indexing/reindexing
+│   ├── sync-memories.sh                 # Ollama health + memory indexing/reindexing
 │   └── continuous-learning-activator.sh # Knowledge extraction reminder
 ├── skills/
-│   ├── continuous-learning/
-│   │   ├── SKILL.md                    # Extraction rules and workflow
-│   │   └── references/
-│   │       └── templates.md            # Learning + Decision memory templates
-│   └── memory-audit/
-│       └── SKILL.md                    # Audit workflow with KEEP/DROP/UPDATE verdicts
+│   ├── continuous-learning/             # Extraction rules + memory templates
+│   └── memory-audit/                    # Audit workflow (KEEP/DROP/UPDATE)
 └── templates/
-    └── continuous-learning.md          # "Search KB before any task"
+    └── continuous-learning.md           # "Search KB before any task"
 ```
 
 ---
 
-## Companion Pack
+## Companion pack
 
-**[shared-memories](https://github.com/mcs-cli/shared-memories)** extends this pack by auto-syncing `.claude/memories/` across teammates via a dedicated git repo. Install both together when you want team-shared memory — `mcs-cli/memory` captures and retrieves, `shared-memories` distributes.
+**[shared-memories](https://github.com/mcs-cli/shared-memories)** extends this pack by auto-syncing `.claude/memories/` across teammates via a dedicated git repo. Install both together for team-shared memory — `mcs-cli/memory` captures and retrieves, `shared-memories` distributes.
 
 ---
 
-## You Might Also Be Interested In
+## You might also like
 
 | Pack | Description |
-|------|-------------|
+|---|---|
 | [dev](https://github.com/mcs-cli/dev) | Foundational settings, plugins, and git workflows |
 | [ios](https://github.com/mcs-cli/ios) | Xcode integration, simulator management, and Apple documentation |
 
@@ -212,8 +98,8 @@ memory/
 ## Links
 
 - [MCS](https://github.com/mcs-cli/mcs) — the configuration engine
-- [Creating Tech Packs](https://github.com/mcs-cli/mcs/blob/main/docs/creating-tech-packs.md) — guide for building your own
-- [Tech Pack Schema](https://github.com/mcs-cli/mcs/blob/main/docs/techpack-schema.md) — full YAML reference
+- [Creating Tech Packs](https://github.com/mcs-cli/mcs/blob/main/docs/creating-tech-packs.md)
+- [Tech Pack Schema](https://github.com/mcs-cli/mcs/blob/main/docs/techpack-schema.md)
 
 ---
 
