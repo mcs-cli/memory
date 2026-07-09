@@ -8,7 +8,12 @@ set -uo pipefail
 # Consume stdin (hook passes JSON context)
 cat >/dev/null 2>&1 || true
 
-project_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+# Resolve the project root. Prefer the git repo toplevel — it's the stable
+# anchor so launching from any subdirectory of a repo maps to the same library.
+# In a non-git folder git exits non-zero (empty output); fall back to where
+# Claude was launched (CLAUDE_PROJECT_DIR, else $PWD).
+project_root=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$project_root" ] || project_root="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 MEMORIES_DIR="$project_root/.claude/memories"
 TIMESTAMP_FILE="$project_root/.claude/.memories-last-indexed"
