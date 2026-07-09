@@ -160,6 +160,7 @@ components:
     description: Ignores memory files from version control
     gitignore:
       - ".claude/.memories-last-indexed"
+      - ".claude/.memories-index.log"
 
 # ---------------------------------------------------------------------------
 # Ignore — maintainer-only files not shipped with the pack
