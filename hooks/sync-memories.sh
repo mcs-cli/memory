@@ -43,20 +43,18 @@ export OPENAI_API_BASE=http://localhost:11434/v1
 export DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_MODE=unrestricted
 export DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_INCLUDE_HIDDEN=true
 export DOCS_MCP_SCRAPER_SECURITY_FILE_ACCESS_FOLLOW_SYMLINKS=true
-embedding_model="openai:nomic-embed-text"
+export DOCS_MCP_EMBEDDING_MODEL="openai:nomic-embed-text"
 
 # Check if library already indexed with the same source URL
-existing_url=$(npx -y @arabold/docs-mcp-server@latest list 2>/dev/null \
+existing_url=$(docs-mcp-server list 2>/dev/null \
     | jq -r --arg name "$repo_name" '.[] | select(.name == $name) | .versions[0].sourceUrl // empty')
 
 if [ "$existing_url" = "file://$MEMORIES_DIR" ]; then
-    npx -y @arabold/docs-mcp-server@latest refresh "$repo_name" \
-        --embedding-model "$embedding_model" \
+    docs-mcp-server refresh "$repo_name" \
         --silent >/dev/null 2>&1
 else
-    npx -y @arabold/docs-mcp-server@latest scrape "$repo_name" \
+    docs-mcp-server scrape "$repo_name" \
         "file://$MEMORIES_DIR" \
-        --embedding-model "$embedding_model" \
         --silent >/dev/null 2>&1
 fi
 

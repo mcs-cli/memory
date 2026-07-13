@@ -83,15 +83,32 @@ components:
           - "http://localhost:11434/v1/embeddings"
 
   # ── MCP Servers ─────────────────────────────────────────────────────────
+  # Install the binary once (pinned) so Claude launches a prebuilt binary.
+  # `npx @latest` re-downloaded on every cache eviction, blowing Claude's 30s
+  # MCP startup limit → "MCP error -32000: Connection closed".
+  - id: docs-mcp-server-install
+    displayName: docs-mcp-server binary
+    description: Installs the docs-mcp-server MCP binary once so Claude launches a prebuilt binary
+    dependencies: [node]
+    type: configuration
+    shell: "npm install -g @arabold/docs-mcp-server@2.4.2"
+    doctorChecks:
+      # `list` loads the better-sqlite3 native addon (a broken/ABI-mismatched
+      # build fails here); `--version` wouldn't — it never loads it.
+      - type: commandExists
+        name: "docs-mcp-server binary loads"
+        section: MCP Servers
+        command: docs-mcp-server
+        args: ["list"]
+        fixCommand: "npm install -g @arabold/docs-mcp-server@2.4.2"
+
   - id: docs-mcp-server
     description: Semantic search over memories using local Ollama embeddings
     isRequired: true
-    dependencies: [node, ollama]
+    dependencies: [node, ollama, docs-mcp-server-install]
     mcp:
-      command: npx
+      command: docs-mcp-server
       args:
-        - "-y"
-        - "@arabold/docs-mcp-server@latest"
         - "--read-only"
         - "--telemetry=false"
       env:
