@@ -91,7 +91,7 @@ components:
     description: Installs the docs-mcp-server MCP binary once so Claude launches a prebuilt binary
     dependencies: [node]
     type: configuration
-    shell: "npm install -g @arabold/docs-mcp-server@2.4.2"
+    shell: "npm install -g @arabold/docs-mcp-server@2.4.3"
     doctorChecks:
       # `list` loads the better-sqlite3 native addon (a broken/ABI-mismatched
       # build fails here); `--version` wouldn't — it never loads it.
@@ -100,7 +100,7 @@ components:
         section: MCP Servers
         command: docs-mcp-server
         args: ["list"]
-        fixCommand: "npm install -g @arabold/docs-mcp-server@2.4.2"
+        fixCommand: "npm install -g @arabold/docs-mcp-server@2.4.3"
 
   - id: docs-mcp-server
     description: Semantic search over memories using local Ollama embeddings
