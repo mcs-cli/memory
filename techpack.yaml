@@ -6,6 +6,24 @@ author: Bruno Guidolim
 minMCSVersion: "2026.4.12"
 
 # ---------------------------------------------------------------------------
+# Prompts — asked once per project during `mcs sync`, then remembered
+# ---------------------------------------------------------------------------
+prompts:
+  - key: KB_GATE_MODE
+    type: select
+    label: "KB gate — how strictly must Claude check the KB before delegating?"
+    default: "warn"
+    options:
+      - value: "warn"
+        label: "Warn — remind and log when a sub-agent is spawned without KB findings"
+      - value: "enforce"
+        label: "Enforce — block the spawn until the KB has been searched this turn"
+      - value: "observe"
+        label: "Observe — never gate the main thread, just log (sub-agents are still briefed)"
+      - value: "off"
+        label: "Off — no gating and no sub-agent briefing; prompt reminder only"
+
+# ---------------------------------------------------------------------------
 # Components
 # ---------------------------------------------------------------------------
 components:
@@ -166,6 +184,62 @@ components:
       source: hooks/sync-memories.sh
       destination: sync-memories.sh
 
+  # ── KB-first delegation ─────────────────────────────────────────────────
+  # Four registrations of one dispatcher script, which branches on
+  # `hook_event_name`. Together they keep KB lookups ahead of delegated discovery,
+  # so sub-agents don't rediscover what a memory already recorded. Matchers stay
+  # broad on purpose — which agent types count as "discovery" is decided in one
+  # place, by `GATED_AGENTS` in the script.
+  - id: hook-kb-gate-turn
+    displayName: KB gate — turn boundary
+    description: Marks each new prompt so the KB check is required again per turn
+    dependencies: [jq]
+    hookEvent: UserPromptSubmit
+    hook:
+      source: hooks/kb-gate.sh
+      destination: kb-gate.sh
+
+  - id: hook-kb-gate-record
+    displayName: KB gate — record searches
+    description: Records each KB search so delegated discovery can be checked against it
+    dependencies: [jq]
+    hookEvent: PostToolUse
+    hookMatcher: "mcp__docs-mcp-server__search_docs"
+    hook:
+      source: hooks/kb-gate.sh
+      destination: kb-gate.sh
+
+  - id: hook-kb-gate-check
+    displayName: KB gate — check sub-agent spawns
+    description: Warns or blocks when a discovery sub-agent is spawned without KB findings in its prompt
+    dependencies: [jq]
+    hookEvent: PreToolUse
+    # The spawn tool is `Agent` in current Claude Code and `Task` in older
+    # builds. Matching only `Task` silently matches nothing.
+    hookMatcher: "Agent|Task"
+    hook:
+      source: hooks/kb-gate.sh
+      destination: kb-gate.sh
+    doctorChecks:
+      - type: hookEventExists
+        name: "PreToolUse hook registered"
+        section: Hooks
+        event: PreToolUse
+
+  - id: hook-kb-subagent-brief
+    displayName: Sub-agent KB brief
+    description: Tells discovery sub-agents that the KB exists, so they search it instead of sweeping files
+    dependencies: [jq]
+    hookEvent: SubagentStart
+    hook:
+      source: hooks/kb-gate.sh
+      destination: kb-gate.sh
+    doctorChecks:
+      - type: hookEventExists
+        name: "SubagentStart hook registered"
+        section: Hooks
+        event: SubagentStart
+
   # ── Configuration ───────────────────────────────────────────────────────
   - id: settings
     displayName: Settings
@@ -177,6 +251,8 @@ components:
     description: Ignores memory files from version control
     gitignore:
       - ".claude/.memories-last-indexed"
+      - ".claude/.kb-gate/"
+      - ".claude/.kb-gate.log"
 
 # ---------------------------------------------------------------------------
 # Ignore — maintainer-only files not shipped with the pack
