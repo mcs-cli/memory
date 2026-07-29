@@ -3,7 +3,7 @@
 # Hook: keep KB lookups ahead of delegated discovery.
 #
 # One dispatcher registered on four events, branching on `hook_event_name`:
-#   UserPromptSubmit  → stamp the turn boundary (resets the barrier each prompt)
+#   UserPromptSubmit  → stamp the turn boundary, and run housekeeping
 #   PostToolUse       → record a successful search_docs query
 #   PreToolUse        → judge a sub-agent spawn, and warn or block
 #   SubagentStart     → tell a discovery sub-agent the KB exists
@@ -18,33 +18,25 @@
 #     before every sub-agent spawn. File stats only.
 #   - Log every evaluation. Comparing log line count against the spawn count in a
 #     session transcript is the only way to catch a matcher that matches nothing.
+#     `off` is the one exception, and it exits before reaching any of this.
 
 MODE="__KB_GATE_MODE__"
 
-# Anti-deadlock budgets for enforce mode, both keyed by turn AND phase. Sized by
-# cost asymmetry: a denial is one cheap round-trip, a discovery agent that runs
-# without KB findings is tens of thousands of tokens. Two orders of magnitude, so
-# the aim is a guaranteed stop, not a tight leash.
-#
-# The first resets whenever a KB search lands, so complying re-arms the gate for
-# the rest of the turn; it is wide enough that a parallel fan-out is denied in
-# full rather than leaking every spawn after the first. The second never resets
-# within a turn, which is what makes termination unconditional.
+# Anti-deadlock budgets for enforce mode. Sized by cost asymmetry: a denial is one
+# cheap round-trip, a discovery agent running without KB findings is tens of
+# thousands of tokens. Two orders of magnitude, so the aim is a guaranteed stop,
+# not a tight leash. How the two differ is documented where they are counted.
 MAX_DENIALS_PER_STATE=4
 MAX_DENIALS_PER_TURN=8
 
 # Nothing outside this script prunes anything it writes, so both artifacts are
-# bounded here.
+# bounded here. The log is a rolling diagnostic — only its recent tail is ever
+# read — and grows by a line per prompt, search, gated spawn and sub-agent start:
+# tens of MB a year in a project worked in daily.
 #
-# The log is a rolling diagnostic — only its recent tail is ever read (comparing
-# line count against the spawn count of the session in front of you), so old
-# lines can be dropped. At roughly 190 bytes a line, one line per prompt, search,
-# gated spawn and sub-agent start, a project worked in daily reaches tens of MB a
-# year.
-#
-# Keep the retained tail well clear of the cap — 1000 lines is ~190 KB against
-# 512 KB. If the two converge, a trim leaves the file still over the threshold
-# and the rewrite fires on every turn instead of every few thousand lines.
+# Keep the retained tail well clear of the cap (1000 lines is ~190 KB against
+# 512 KB). If the two converge, a trim leaves the file still over the threshold
+# and the rewrite fires every turn instead of every few thousand lines.
 LOG_MAX_BYTES=524288
 LOG_KEEP_LINES=1000
 
@@ -52,9 +44,10 @@ LOG_KEEP_LINES=1000
 # the problem — inodes are, at three per session forever.
 STATE_MAX_AGE_DAYS=7
 
-# The prompt marker is a wire protocol shared with the `KB context:` contract in
-# the CLAUDE.local.md template. Single definition: it is both the string the
-# messages below instruct Claude to write, and the string tested for.
+# A wire protocol: the string the messages below tell Claude to write, and the
+# string tested for. The CLAUDE.local.md template carries its own copy, so
+# changing one side alone silently disables the gate — the test suite asserts the
+# two agree.
 KB_MARKER="KB context:"
 
 # Single source of truth for "which agents do discovery". The SubagentStart and
@@ -72,10 +65,11 @@ command -v jq >/dev/null 2>&1 || exit 0
 payload=$(</dev/stdin)
 [ -n "$payload" ] || exit 0
 
-# Every field any branch needs, in ONE jq call. PreToolUse runs before each spawn,
-# so process count dominates; the prompt is reduced to a boolean inside jq rather
-# than round-tripping through the shell. `contains` not `test` — the marker is a
-# literal, not a regex.
+# One jq call for every field the branches share. PreToolUse runs before each
+# spawn, so process count dominates; the prompt is reduced to a boolean inside jq
+# rather than round-tripping through the shell. `contains` not `test` — the marker
+# is a literal, not a regex. PostToolUse parses `query` separately because it is
+# the one field that can contain a newline, which the read below cannot survive.
 #
 # One field per LINE, read with one `read` each — deliberately not `@tsv` with a
 # single tab-split read. Tab is an IFS *whitespace* character, so bash collapses
@@ -145,8 +139,9 @@ current_turn() {
     esac
 }
 
-# Logging is unconditional and mode-independent: a mode change must never leave a
-# gap in the data. `$1` is a pre-built JSON object of extra fields.
+# Logging is unconditional across strictness levels: switching warn↔observe↔enforce
+# must never leave a gap in the data. `$1` is a pre-built JSON object of extra
+# fields.
 log_event() {
     resolve_paths
     jq -nc \
@@ -161,7 +156,7 @@ log_event() {
 # Decision records share a shape, so build it with printf — every value is either
 # whitelisted (agent_type, phase), a literal boolean, or an integer. Keeps a
 # second jq off the hot path.
-# $1=satisfied $2=decision $3=optional trailing pairs, e.g. ',"attempt":2'
+# $1=satisfied $2=decision $3=optional trailing pairs, e.g. budget_fields output
 log_decision() {
     log_event "$(printf \
         '{"phase":"%s","agent_type":"%s","fresh_query":%s,"had_kb_block":%s,"satisfied":%s,"decision":"%s"%s}' \
@@ -175,9 +170,7 @@ budget_fields() {
 }
 
 # Called once per turn, never on the spawn path: the common case is one `wc`, and
-# the rewrite only happens on the rare turn that crosses the threshold. Guarded on
-# existence rather than relying on `2>/dev/null` — a failed input redirection is
-# reported by the shell itself, so a missing file would print to stderr. Losing a
+# the rewrite only happens on the rare turn that crosses the threshold. Losing a
 # line to a concurrent append during the swap is acceptable for a diagnostic log.
 trim_log() {
     [ -f "$LOG_FILE" ] || return 0
@@ -224,7 +217,8 @@ UserPromptSubmit)
 
 PostToolUse)
     # A KB search landed. Store the query text (not just the turn) so the barrier
-    # can become topical later without a state migration.
+    # can become topical later without a state migration. The number of lines
+    # matching the current turn is also what stamps a denial's progress marker.
     query=$(jq -r '.tool_input.query // ""' <<<"$payload" 2>/dev/null)
     [ -n "$query" ] || exit 0
     ensure_state || exit 0
@@ -268,7 +262,7 @@ SubagentStart)
 PreToolUse)
     phase=discovery
 
-    # --- Fail-open guards. All use already-parsed fields, so they cost nothing ---
+    # --- Skip guards, cheapest first ---
 
     # PreToolUse also fires for tool calls made *inside* sub-agents. Judging those
     # against the parent's markers would gate an agent for its parent's omission.

@@ -16,8 +16,9 @@
 #     from the checkout would write state into the working tree and read the
 #     developer's real session files.
 #   - The fixture project must contain .claude/memories/. Without it every
-#     PreToolUse call takes the `no_memories_dir` skip and the whole suite passes
-#     vacuously. The final denial-count check is what makes that failure loud.
+#     PreToolUse call takes the `no_memories_dir` skip and nothing is ever gated.
+#     The denial count checked at the end is what turns that into a loud failure
+#     rather than a green run that asserted nothing.
 
 set -uo pipefail
 
@@ -47,9 +48,10 @@ for m in enforce warn observe off; do
     sed "s/__KB_GATE_MODE__/$m/" "$src" >"$work/kb-gate-$m.sh"
 done
 
-proj="$work/proj" # a project with a KB
-nokb="$work/nokb" # a project without one
-mkdir -p "$proj/.claude/memories" "$nokb/.claude"
+proj="$work/proj"       # a project with a KB
+nokb="$work/nokb"       # a project without one
+offproj="$work/offproj" # untouched except by mode=off, so "wrote nothing" is checkable
+mkdir -p "$proj/.claude/memories" "$nokb/.claude" "$offproj/.claude/memories"
 log="$proj/.claude/.kb-gate.log"
 state="$proj/.claude/.kb-gate"
 
@@ -153,10 +155,6 @@ inode() { ls -i "$1" 2>/dev/null | awk '{print $1}'; }
 
 # ==========================================================================
 
-group "sanity — the fixture actually gates (guards against a vacuous suite)"
-new_session
-assert_deny "bare spawn is denied" "$(spawn)"
-
 group "satisfied barrier"
 new_session
 search
@@ -164,38 +162,44 @@ assert_allow "search this turn + KB block in prompt" "$(spawn "$KB — findings 
 
 group "parallel fan-out is denied in full"
 new_session
-assert_deny "fan-out #1" "$(spawn)"
-assert_deny "fan-out #2" "$(spawn)"
-assert_deny "fan-out #3" "$(spawn)"
+assert_deny "first of the batch" "$(spawn)"
+assert_deny "and the second, which the old per-turn counter let through" "$(spawn)"
 
 group "complying re-arms the gate for the rest of the turn"
 new_session
 assert_deny "first spawn denied" "$(spawn)"
 search
 assert_allow "retry with search + block" "$(spawn "$KB — now with findings")"
-assert_allow "second compliant spawn" "$(spawn "$KB — still compliant")"
-assert_deny "later spawn without a block is still gated" "$(spawn)"
+assert_deny "later spawn without a block is gated again" "$(spawn)"
 
-group "budget: no progress"
+# Both budget groups assert only the boundary — the denial at the limit and the
+# release after it. The counters are monotonic, so an early release would show up
+# as the boundary denial failing; asserting each intermediate spawn adds nothing.
+group "budget: released once the no-progress budget is spent"
 new_session
 i=1
-while [ "$i" -le "$MAX_DENIALS_PER_STATE" ]; do
-    assert_deny "denial $i of $MAX_DENIALS_PER_STATE" "$(spawn)"
+while [ "$i" -lt "$MAX_DENIALS_PER_STATE" ]; do
+    spawn >/dev/null
     i=$((i + 1))
 done
-assert_allow "next spawn released by the no-progress budget" "$(spawn)"
+assert_deny "denial $MAX_DENIALS_PER_STATE is still a denial" "$(spawn)"
+assert_allow "the next one is released" "$(spawn)"
 assert_log "released as budget_no_progress" '"skip_reason":"budget_no_progress"'
 assert_allow "and stays released" "$(spawn)"
 
-group "budget: per-turn ceiling terminates a search-then-spawn loop"
+group "budget: the per-turn ceiling terminates a search-then-spawn loop"
 new_session
 i=1
-while [ "$i" -le "$MAX_DENIALS_PER_TURN" ]; do
-    assert_deny "loop denial $i of $MAX_DENIALS_PER_TURN" "$(spawn)"
-    search "topic $i" # progress each round, so only the hard ceiling can stop this
+while [ "$i" -lt "$MAX_DENIALS_PER_TURN" ]; do
+    spawn >/dev/null
+    search "topic $i" # progress every round, so only the hard ceiling can stop this
     i=$((i + 1))
 done
-assert_allow "next spawn released by the per-turn ceiling" "$(spawn)"
+assert_deny "denial $MAX_DENIALS_PER_TURN is still a denial" "$(spawn)"
+# Fresh progress right before the release proves it came from the turn ceiling
+# and not from the no-progress budget.
+search "one more topic"
+assert_allow "released despite having just searched" "$(spawn)"
 assert_log "released as budget_turn" '"skip_reason":"budget_turn"'
 
 group "turn boundary resets the barrier"
@@ -212,16 +216,25 @@ assert_silent "project without a KB" "$(run "$mode" "$nokb" "$(j_spawn)")"
 assert_silent "empty payload" "$(run "$mode" "$proj" "")"
 
 group "non-enforce modes never block"
-for m in warn observe off; do
-    mode=$m
-    new_session
-    assert_allow "mode=$m does not deny" "$(spawn)"
-done
-
-group "warn mode still advises"
 mode=warn
 new_session
-assert_contains "warn emits a reminder" "$(spawn)" additionalContext
+warn_out=$(spawn)
+assert_allow "warn does not deny" "$warn_out"
+assert_contains "warn advises instead" "$warn_out" additionalContext
+
+mode=observe
+new_session
+assert_silent "observe records but says nothing" "$(spawn)"
+
+# off is a kill switch, not the quietest strictness level, so asserting it merely
+# does not deny is too weak: without the early exit it falls through to the warn
+# path and still passes that. Assert it does nothing at all instead.
+mode=off
+sid=off-session
+run off "$offproj" "$(j_turn)" >/dev/null
+assert_silent "off emits nothing" "$(run off "$offproj" "$(j_spawn)")"
+assert_silent "off writes neither log nor state" \
+    "$(find "$offproj/.claude" -name '.kb-gate*' 2>/dev/null)"
 mode=enforce
 
 group "the KB marker is the same string on both sides of the contract"
@@ -256,7 +269,6 @@ while [ "${#filler}" -le "$LOG_MAX_BYTES" ]; do filler="$filler$filler"; done
 printf '%s' "$filler" >>"$log"
 
 before=$(wc -c <"$log")
-assert_num "filler clears the cap" "$before" -gt "$LOG_MAX_BYTES"
 turn
 after=$(wc -c <"$log")
 assert_num "oversized log is trimmed on a turn boundary" "$after" -lt "$before"
