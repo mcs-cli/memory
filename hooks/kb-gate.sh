@@ -33,6 +33,25 @@ MODE="__KB_GATE_MODE__"
 MAX_DENIALS_PER_STATE=4
 MAX_DENIALS_PER_TURN=8
 
+# Nothing outside this script prunes anything it writes, so both artifacts are
+# bounded here.
+#
+# The log is a rolling diagnostic — only its recent tail is ever read (comparing
+# line count against the spawn count of the session in front of you), so old
+# lines can be dropped. At roughly 190 bytes a line, one line per prompt, search,
+# gated spawn and sub-agent start, a project worked in daily reaches tens of MB a
+# year.
+#
+# Keep the retained tail well clear of the cap — 1000 lines is ~190 KB against
+# 512 KB. If the two converge, a trim leaves the file still over the threshold
+# and the rewrite fires on every turn instead of every few thousand lines.
+LOG_MAX_BYTES=524288
+LOG_KEEP_LINES=1000
+
+# Per-session state is three small files that nothing ever removes. Bytes are not
+# the problem — inodes are, at three per session forever.
+STATE_MAX_AGE_DAYS=7
+
 # The prompt marker is a wire protocol shared with the `KB context:` contract in
 # the CLAUDE.local.md template. Single definition: it is both the string the
 # messages below instruct Claude to write, and the string tested for.
@@ -155,6 +174,34 @@ budget_fields() {
     printf ',"denials_turn":%s,"denials_state":%s' "$1" "$2"
 }
 
+# Called once per turn, never on the spawn path: the common case is one `wc`, and
+# the rewrite only happens on the rare turn that crosses the threshold. Guarded on
+# existence rather than relying on `2>/dev/null` — a failed input redirection is
+# reported by the shell itself, so a missing file would print to stderr. Losing a
+# line to a concurrent append during the swap is acceptable for a diagnostic log.
+trim_log() {
+    [ -f "$LOG_FILE" ] || return 0
+    # `wc` pads its output with leading spaces on BSD/macOS. Stripping non-digits
+    # is the whole guard: what survives is either digits or empty.
+    size=$(wc -c <"$LOG_FILE" 2>/dev/null)
+    size=${size//[^0-9]/}
+    [ -n "$size" ] || return 0
+    [ "$size" -gt "$LOG_MAX_BYTES" ] || return 0
+    # Temp file lives in the state dir, which is already gitignored, so a crash
+    # mid-rewrite cannot leave an untracked file in the user's working tree. `mv`
+    # unlinks the source, so one unconditional cleanup covers both failure paths.
+    tail -n "$LOG_KEEP_LINES" "$LOG_FILE" >"$STATE_DIR/log.tmp" 2>/dev/null &&
+        mv "$STATE_DIR/log.tmp" "$LOG_FILE" 2>/dev/null
+    rm -f "$STATE_DIR/log.tmp" 2>/dev/null
+}
+
+# Old sessions' state, swept on the first turn of a new session — the natural unit
+# for "clean up after the ones that ended", and it keeps the fork off every turn.
+# Current-session files are minutes old and never match.
+sweep_state() {
+    find "$STATE_DIR" -type f -mtime "+$STATE_MAX_AGE_DAYS" -delete 2>/dev/null
+}
+
 is_gated_agent() {
     case " $GATED_AGENTS " in
     *" $1 "*) return 0 ;;
@@ -166,8 +213,11 @@ case "$event" in
 UserPromptSubmit)
     # New turn: reset the barrier and clear this turn's denial history.
     ensure_state || exit 0
-    : >"$DENIALS_FILE" 2>/dev/null || true
     turn=$(( $(current_turn) + 1 ))
+    # Turn 1 means no turn file existed, i.e. this session just started.
+    [ "$turn" = 1 ] && sweep_state
+    trim_log
+    : >"$DENIALS_FILE" 2>/dev/null || true
     echo "$turn" >"$TURN_FILE" 2>/dev/null || true
     log_event "$(printf '{"decision":"turn_start","turn":%s}' "$turn")"
     ;;

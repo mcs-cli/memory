@@ -35,8 +35,9 @@ command -v jq >/dev/null 2>&1 || {
 
 # Budgets come from the script, never re-typed here: retuning them is a routine
 # edit with no correctness risk, and it should not break the suite.
-eval "$(grep -E '^MAX_DENIALS_PER_(STATE|TURN)=' "$src")"
-: "${MAX_DENIALS_PER_STATE:?not found in $src}" "${MAX_DENIALS_PER_TURN:?not found in $src}"
+eval "$(grep -E '^(MAX_DENIALS_PER_(STATE|TURN)|LOG_(MAX_BYTES|KEEP_LINES))=' "$src")"
+: "${MAX_DENIALS_PER_STATE:?not found in $src}" "${MAX_DENIALS_PER_TURN:?not found in $src}" \
+    "${LOG_MAX_BYTES:?not found in $src}" "${LOG_KEEP_LINES:?not found in $src}"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -49,6 +50,8 @@ done
 proj="$work/proj" # a project with a KB
 nokb="$work/nokb" # a project without one
 mkdir -p "$proj/.claude/memories" "$nokb/.claude"
+log="$proj/.claude/.kb-gate.log"
+state="$proj/.claude/.kb-gate"
 
 pass=0
 fail=0
@@ -137,11 +140,16 @@ assert_silent() {
     if [ -z "$2" ]; then ok "$1"; else bad "$1" "expected no output, got: $2"; fi
 }
 
+assert_num() { # <label> <actual> <op> <expected>
+    if [ "$2" "$3" "$4" ]; then ok "$1"; else bad "$1" "expected $2 $3 $4"; fi
+}
+
 # The last PreToolUse decision in the log must mention <pattern>.
 assert_log() {
-    assert_contains "$1" \
-        "$(grep '"event":"PreToolUse"' "$proj/.claude/.kb-gate.log" 2>/dev/null | tail -1)" "$2"
+    assert_contains "$1" "$(grep '"event":"PreToolUse"' "$log" 2>/dev/null | tail -1)" "$2"
 }
+
+inode() { ls -i "$1" 2>/dev/null | awk '{print $1}'; }
 
 # ==========================================================================
 
@@ -226,6 +234,49 @@ else
     assert_contains "template teaches the marker the hook tests for" \
         "$(cat "$template")" "$marker"
 fi
+
+group "stale session state is swept"
+new_session
+touch -t 200001010000 "$state/ancient.turn" 2>/dev/null
+new_session # a new session's first turn is when the sweep runs
+assert_silent "state from an old session is removed" \
+    "$(find "$state" -name 'ancient.turn' 2>/dev/null)"
+assert_contains "the current session's state survives" \
+    "$(find "$state" -name "$sid.turn" 2>/dev/null)" "$sid.turn"
+
+# Kept last on purpose: this group fills and truncates the shared log, which
+# assert_log reads. Moving it earlier breaks unrelated assertions.
+group "the log is bounded"
+new_session
+# Built by doubling rather than a loop of thousands of printfs, and guaranteed to
+# clear the cap by construction rather than by an estimated line count.
+filler='{"ts":"filler","event":"UserPromptSubmit","mode":"enforce","decision":"turn_start"}
+'
+while [ "${#filler}" -le "$LOG_MAX_BYTES" ]; do filler="$filler$filler"; done
+printf '%s' "$filler" >>"$log"
+
+before=$(wc -c <"$log")
+assert_num "filler clears the cap" "$before" -gt "$LOG_MAX_BYTES"
+turn
+after=$(wc -c <"$log")
+assert_num "oversized log is trimmed on a turn boundary" "$after" -lt "$before"
+
+# Under the cap the file must not be touched at all. Asserting on the inode rather
+# than the size is what makes this fail against an implementation that rewrites
+# unconditionally — a tail-and-rename leaves the content plausible but the inode
+# different.
+: >"$log"
+turn
+before_inode=$(inode "$log")
+turn
+assert_num "a log under the cap is not rewritten" "$(inode "$log")" -eq "$before_inode"
+
+assert_silent "no stray temp files" "$(find "$state" -name '*.tmp' 2>/dev/null)"
+
+# If the retained tail ever approached the cap, every trim would leave the file
+# still over it and the rewrite would fire on every turn.
+assert_num "retained tail stays well clear of the cap" \
+    "$((LOG_KEEP_LINES * 200))" -lt "$((LOG_MAX_BYTES / 2))"
 
 # ==========================================================================
 
