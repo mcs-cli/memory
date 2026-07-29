@@ -21,6 +21,18 @@
 
 MODE="__KB_GATE_MODE__"
 
+# Anti-deadlock budgets for enforce mode, both keyed by turn AND phase. Sized by
+# cost asymmetry: a denial is one cheap round-trip, a discovery agent that runs
+# without KB findings is tens of thousands of tokens. Two orders of magnitude, so
+# the aim is a guaranteed stop, not a tight leash.
+#
+# The first resets whenever a KB search lands, so complying re-arms the gate for
+# the rest of the turn; it is wide enough that a parallel fan-out is denied in
+# full rather than leaking every spawn after the first. The second never resets
+# within a turn, which is what makes termination unconditional.
+MAX_DENIALS_PER_STATE=4
+MAX_DENIALS_PER_TURN=8
+
 # The prompt marker is a wire protocol shared with the `KB context:` contract in
 # the CLAUDE.local.md template. Single definition: it is both the string the
 # messages below instruct Claude to write, and the string tested for.
@@ -32,6 +44,11 @@ KB_MARKER="KB context:"
 GATED_AGENTS="Explore general-purpose Plan"
 
 command -v jq >/dev/null 2>&1 || exit 0
+
+# Off is a kill switch, not the quietest strictness level — `observe` is already
+# "never gate, just log". So off means off: no state directory, no log lines, no
+# work at all, for a user who opted out.
+[ "$MODE" = "off" ] && exit 0
 
 payload=$(</dev/stdin)
 [ -n "$payload" ] || exit 0
@@ -46,13 +63,13 @@ payload=$(</dev/stdin)
 # runs of them: an empty field (`agent_id` is empty on main-thread calls) would
 # silently shift every later field left. None of these values can contain a
 # newline, so line-per-field is unambiguous.
-fields=$(printf '%s' "$payload" | jq -r --arg m "$KB_MARKER" '[
+fields=$(jq -r --arg m "$KB_MARKER" '[
     .hook_event_name // "",
     .session_id // "unknown",
     .agent_id // "",
     (.tool_input.subagent_type // .agent_type // ""),
     (if (.tool_input.prompt // "") | contains($m) then "true" else "false" end)
-] | .[]' 2>/dev/null)
+] | .[]' <<<"$payload" 2>/dev/null)
 [ -n "$fields" ] || exit 0
 
 {
@@ -65,14 +82,17 @@ fields=$(printf '%s' "$payload" | jq -r --arg m "$KB_MARKER" '[
 $fields
 EOF
 
-# Paths are resolved on demand: the skip guards below need none of them, and
-# `git rev-parse` is the most expensive call in the script.
+# Paths are resolved on demand, and `git rev-parse` is the most expensive call in
+# the script. Note this only pays off on the two SubagentStart exits that precede
+# any logging — every other branch logs, and logging needs the project root, so a
+# skip costs the same as a decision. Keep it that way: the unconditional log is
+# worth more than the fork.
 resolve_paths() {
     [ -n "$project_root" ] && return 0
     project_root=$(git rev-parse --show-toplevel 2>/dev/null)
     [ -n "$project_root" ] || project_root="${CLAUDE_PROJECT_DIR:-$PWD}"
-    # Matches sync-memories.sh's derivation, so the library name quoted back to
-    # Claude is the one that was actually indexed.
+    # keep in sync with hooks/sync-memories.sh project root + library derivation —
+    # the library name quoted back to Claude has to be the one that was indexed.
     library="${project_root##*/}"
     MEMORIES_DIR="$project_root/.claude/memories"
     LOG_FILE="$project_root/.claude/.kb-gate.log"
@@ -129,6 +149,12 @@ log_decision() {
         "$phase" "$agent_type" "$fresh_query" "$had_kb_block" "$1" "$2" "$3")"
 }
 
+# The trailing pairs every enforce-mode decision carries. One definition, so
+# renaming a key or adding a counter is a single edit.
+budget_fields() {
+    printf ',"denials_turn":%s,"denials_state":%s' "$1" "$2"
+}
+
 is_gated_agent() {
     case " $GATED_AGENTS " in
     *" $1 "*) return 0 ;;
@@ -149,7 +175,7 @@ UserPromptSubmit)
 PostToolUse)
     # A KB search landed. Store the query text (not just the turn) so the barrier
     # can become topical later without a state migration.
-    query=$(printf '%s' "$payload" | jq -r '.tool_input.query // ""' 2>/dev/null)
+    query=$(jq -r '.tool_input.query // ""' <<<"$payload" 2>/dev/null)
     [ -n "$query" ] || exit 0
     ensure_state || exit 0
     printf '%s\t%s\n' "$(current_turn)" "$query" >>"$QUERIES_FILE" 2>/dev/null || true
@@ -161,7 +187,6 @@ SubagentStart)
     # often spawns agents in the same tool block as its own KB search, so the
     # agents never receive the findings; this makes each agent self-sufficient
     # rather than depending on the parent getting the order right.
-    [ "$MODE" = "off" ] && exit 0
     is_gated_agent "$agent_type" || exit 0
     resolve_paths
     [ -d "$MEMORIES_DIR" ] || exit 0
@@ -220,26 +245,31 @@ PreToolUse)
 
     # --- Evaluate the two halves of the barrier ---
 
-    # Ordering: was a KB search recorded during *this* turn?
+    # Ordering: was a KB search recorded during *this* turn? Counted rather than
+    # merely tested, because the same number does double duty below as the
+    # progress stamp on a denial — "how much had Claude searched when this was
+    # written". A later denial carrying a different count means a search landed
+    # in between.
     turn=$(current_turn)
+    qseen=0
+    [ -f "$QUERIES_FILE" ] && qseen=$(awk -F'\t' -v t="$turn" \
+        '$1 == t { n++ } END { print n + 0 }' "$QUERIES_FILE" 2>/dev/null)
+    case "$qseen" in
+    '' | *[!0-9]*) qseen=0 ;;
+    esac
     fresh_query=false
-    if [ -f "$QUERIES_FILE" ] && awk -F'\t' -v t="$turn" \
-        '$1 == t { found = 1 } END { exit !found }' "$QUERIES_FILE" 2>/dev/null; then
-        fresh_query=true
-    fi
+    [ "$qseen" -gt 0 ] && fresh_query=true
 
     if [ "$fresh_query" = true ] && [ "$had_kb_block" = true ]; then
         log_decision true allow
         exit 0
     fi
 
-    case "$MODE" in
-    off | observe)
-        # Recorded, but nothing is said to Claude.
-        log_decision false "$MODE"
+    # observe: recorded, but nothing is said to Claude. (off already exited above.)
+    [ "$MODE" = "observe" ] && {
+        log_decision false observe
         exit 0
-        ;;
-    esac
+    }
 
     # Name whichever half failed, so the message is actionable.
     missing=""
@@ -248,24 +278,62 @@ PreToolUse)
         missing="${missing:+$missing, and }the prompt has no \"$KB_MARKER\" block"
 
     if [ "$MODE" = "enforce" ]; then
-        # Anti-deadlock: allow through on the second denial of this phase in this
-        # turn. Whatever the cause — an unsatisfiable condition, a rephrasing
-        # loop, a bug — the worst case is one wasted call, never a hang. Keyed by
-        # phase so a denied spawn cannot burn the budget for an unrelated gate.
-        attempt=$(( $(awk -F'\t' -v t="$turn" -v p="$phase" \
-            '$1 == t && $2 == p { n++ } END { print n + 0 }' \
-            "$DENIALS_FILE" 2>/dev/null || echo 0) + 1 ))
-        if [ "$attempt" -ge 2 ]; then
-            log_decision false allow ',"skip_reason":"attempt_limit","attempt":'"$attempt"
+        # Anti-deadlock. Two budgets from one append-only file: each denial is
+        # stamped with the search count at the time it was written, so counting
+        # lines two ways answers two different questions. Only appends, no
+        # read-modify-write — several of these can run at once when a batch of
+        # spawns arrives together, and only an append is atomic.
+        #
+        #   denials_state — denials since the last KB search. A search changes
+        #                   $qseen, which retires the old stamps and re-arms the
+        #                   gate, so complying mid-turn is rewarded rather than
+        #                   spending budget.
+        #   denials_turn  — every denial this turn, never reset. This is the one
+        #                   that guarantees termination: whatever the cause of a
+        #                   loop, it stops here.
+        #
+        # Both keyed by phase, so a denied spawn cannot burn the budget of an
+        # unrelated gate.
+        denials_turn=0
+        denials_state=0
+        if [ -f "$DENIALS_FILE" ]; then
+            # Guarded, not just `2>/dev/null`: awk on a missing file exits 2 and
+            # prints nothing, leaving both counters empty — which would fail
+            # *closed*, the one direction this script must never fail in.
+            counts=$(awk -F'\t' -v t="$turn" -v p="$phase" -v q="$qseen" \
+                '$1 == t && $2 == p { total++; if (($3 + 0) == q) same++ }
+                 END { print total + 0, same + 0 }' "$DENIALS_FILE" 2>/dev/null)
+            read -r denials_turn denials_state <<EOF
+$counts
+EOF
+        fi
+
+        # Anything unreadable is a script bug, and a script bug must not block.
+        budget_unreadable=false
+        case "$denials_turn" in '' | *[!0-9]*) budget_unreadable=true ;; esac
+        case "$denials_state" in '' | *[!0-9]*) budget_unreadable=true ;; esac
+        if [ "$budget_unreadable" = true ]; then
+            log_decision false allow ',"skip_reason":"budget_unreadable"'
             exit 0
         fi
-        printf '%s\t%s\n' "$turn" "$phase" >>"$DENIALS_FILE" 2>/dev/null || true
-        log_decision false deny ',"attempt":'"$attempt"
+
+        # Tested in this order so the turn ceiling wins the reason when both are
+        # spent — it is the one that makes termination unconditional.
+        budget_spent=""
+        [ "$denials_state" -ge "$MAX_DENIALS_PER_STATE" ] && budget_spent=budget_no_progress
+        [ "$denials_turn" -ge "$MAX_DENIALS_PER_TURN" ] && budget_spent=budget_turn
+        if [ -n "$budget_spent" ]; then
+            log_decision false allow ',"skip_reason":"'"$budget_spent"'"'"$(budget_fields "$denials_turn" "$denials_state")"
+            exit 0
+        fi
+
+        printf '%s\t%s\t%s\n' "$turn" "$phase" "$qseen" >>"$DENIALS_FILE" 2>/dev/null || true
+        log_decision false deny "$(budget_fields "$((denials_turn + 1))" "$((denials_state + 1))")"
 
         # Phrased as a missing prerequisite plus an explicit retry instruction. A
         # bare denial reads as "the user declined" and makes Claude abandon the
         # path instead of satisfying the requirement.
-        jq -nc --arg e "$event" --arg r "Prerequisite missing: $missing. Call search_docs(library=\"$library\", query=\"<your topic>\") first, then re-issue this exact call with a \"$KB_MARKER\" block (1-5 bullets of findings, or \"$KB_MARKER none relevant.\") at the top of the prompt. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch." \
+        jq -nc --arg e "$event" --arg r "Prerequisite missing: $missing. Call search_docs(library=\"$library\", query=\"<your topic>\") first, then re-issue this exact call with a \"$KB_MARKER\" block (1-5 bullets of findings, or \"$KB_MARKER none relevant.\") at the top of the prompt. Spawning several agents at once: write the findings to a scratchpad file and open each prompt with \"$KB_MARKER see <path>\" instead of repeating them. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch." \
             '{hookSpecificOutput:{hookEventName:$e,permissionDecision:"deny",permissionDecisionReason:$r}}'
         exit 0
     fi

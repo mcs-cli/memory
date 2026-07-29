@@ -198,6 +198,15 @@ components:
     hook:
       source: hooks/kb-gate.sh
       destination: kb-gate.sh
+    # Checked because losing this one corrupts the gate rather than disabling it:
+    # with no turn stamp the counter reads 0 forever, so every search ever made in
+    # the session counts as fresh and the barrier silently widens from per-turn to
+    # per-session.
+    doctorChecks:
+      - type: hookEventExists
+        name: "UserPromptSubmit hook registered"
+        section: Hooks
+        event: UserPromptSubmit
 
   - id: hook-kb-gate-record
     displayName: KB gate — record searches
@@ -208,6 +217,13 @@ components:
     hook:
       source: hooks/kb-gate.sh
       destination: kb-gate.sh
+    # Same reasoning: without this, no search is ever recorded and the gate is
+    # pure friction until the budget releases it.
+    doctorChecks:
+      - type: hookEventExists
+        name: "PostToolUse hook registered"
+        section: Hooks
+        event: PostToolUse
 
   - id: hook-kb-gate-check
     displayName: KB gate — check sub-agent spawns
@@ -259,6 +275,7 @@ components:
 # ---------------------------------------------------------------------------
 ignore:
   - SYNC-BLOCKS.md
+  - tests/
 
 # ---------------------------------------------------------------------------
 # Templates — CLAUDE.local.md sections

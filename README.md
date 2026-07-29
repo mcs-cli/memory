@@ -45,6 +45,23 @@ flowchart LR
 
 ---
 
+## Gate modes
+
+Installing this pack asks one question: how strictly the gate in step 3 should hold the rule. It's the only prompt in the pack, and the answer is remembered at sync time.
+
+| Mode | When a discovery sub-agent is spawned without KB findings | Pick it when |
+|---|---|---|
+| `warn` *(default)* | Claude gets a reminder; the agent runs anyway | You want the nudge, never an interruption |
+| `enforce` | The spawn is denied, naming what's missing and how to retry | You want the rule actually held |
+| `observe` | Nothing is said, the decision is logged | You want to see how often it would fire before switching it on |
+| `off` | Nothing at all — no gating, no sub-agent briefing | You've opted out; the instruction stays in `CLAUDE.local.md`, nothing checks it |
+
+`enforce` cannot wedge a session: denials are budgeted per turn, so a spawn always gets through eventually even if the rule is never satisfied. Every mode except `off` also briefs discovery sub-agents at startup and records its decisions to `.claude/.kb-gate.log`.
+
+To change the answer later, re-run `mcs sync` — the mode is baked into the installed hook, not read from a setting at runtime.
+
+---
+
 ## What's included
 
 | Component | What it does |
