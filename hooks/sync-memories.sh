@@ -12,6 +12,9 @@ cat >/dev/null 2>&1 || true
 # anchor so launching from any subdirectory of a repo maps to the same library.
 # In a non-git folder git exits non-zero (empty output); fall back to where
 # Claude was launched (CLAUDE_PROJECT_DIR, else $PWD).
+#
+# keep in sync with hooks/kb-gate.sh resolve_paths() — that hook quotes the
+# library name back to Claude, and it has to be the one indexed here.
 project_root=$(git rev-parse --show-toplevel 2>/dev/null)
 [ -n "$project_root" ] || project_root="${CLAUDE_PROJECT_DIR:-$PWD}"
 

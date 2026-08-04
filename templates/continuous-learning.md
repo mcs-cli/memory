@@ -19,6 +19,27 @@ Search the KB again **before starting** whenever the work shifts to a new phase,
 
 Past sessions often contain decisions and patterns that prevent unnecessary iterations and PR comments.
 
+### Delegation barrier
+
+`search_docs` and any sub-agent spawn (the `Agent` / `Task` tool) are **not** independent calls —
+the KB result is an *input* to the sub-agent's prompt. Never place them in the same message, and
+never spawn a sub-agent before you have read the KB results.
+
+Every sub-agent prompt that reads or searches this codebase must open with:
+
+```
+KB context: <1-5 bullets — file paths, patterns, gotchas, decisions from the KB>
+```
+
+or the literal line `KB context: none relevant.`
+
+Two rules that save the most work:
+
+- **If the KB already names the files, read them directly.** Do not spawn an agent to re-find
+  what a memory already told you. The cheapest outcome is no agent at all.
+- **Fanning out to 3+ agents?** Write the findings once to a scratchpad file and point each agent
+  at it — but keep the opener, as `KB context: see <path>`. The block is required either way.
+
 ## Referencing memories in shared artifacts
 
 Memory files are a project-internal KB — filenames drift as files are renamed or merged, and not all readers have repo access. **Never cite memory filenames** in commits, PR descriptions, issue trackers, chat, code comments, docstrings, or release notes — whether or not `.claude/memories/` is tracked in git.

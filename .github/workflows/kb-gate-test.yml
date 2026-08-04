@@ -1,0 +1,34 @@
+name: kb-gate-test
+
+on:
+  pull_request:
+    paths:
+      - "hooks/kb-gate.sh"
+      - "tests/kb-gate-test.sh"
+      - ".github/workflows/kb-gate-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "hooks/kb-gate.sh"
+      - "tests/kb-gate-test.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kb-gate-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Twice, deliberately: the barrier is scoped by a monotonic turn counter
+      # rather than by wall-clock time, and a regression to timestamps would show
+      # up as a second run behaving differently from the first.
+      - name: Run the KB gate suite twice
+        run: |
+          bash tests/kb-gate-test.sh
+          bash tests/kb-gate-test.sh

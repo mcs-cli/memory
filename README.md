@@ -38,9 +38,27 @@ flowchart LR
 
 1. **Session starts** — a hook re-indexes `.claude/memories/` into a local vector store (Ollama `nomic-embed-text`), in the background.
 2. **Before any task** — Claude is instructed to search the knowledge base first, surfacing relevant past learnings and decisions.
-3. **During work** — a prompt-submit hook reminds Claude to notice when the current interaction produces knowledge worth saving.
-4. **After valuable work** — the `continuous-learning` skill extracts structured memories, checks for duplicates, and writes them to `.claude/memories/`.
-5. **Next session** — the new memories are indexed and surfaced again. The loop compounds: debugging patterns aren't rediscovered, decisions aren't re-litigated, conventions aren't re-explained.
+3. **Before delegating** — sub-agents can't see the parent's KB results, so they'd rediscover everything from scratch. A gate hook closes that gap from both ends: it requires the findings to be pasted into the sub-agent's prompt, and tells any discovery agent to search the KB itself if they weren't. Configurable per project, from a reminder up to a hard block.
+4. **During work** — a prompt-submit hook reminds Claude to notice when the current interaction produces knowledge worth saving.
+5. **After valuable work** — the `continuous-learning` skill extracts structured memories, checks for duplicates, and writes them to `.claude/memories/`.
+6. **Next session** — the new memories are indexed and surfaced again. The loop compounds: debugging patterns aren't rediscovered, decisions aren't re-litigated, conventions aren't re-explained.
+
+---
+
+## Gate modes
+
+Installing this pack asks one question: how strictly the gate in step 3 should hold the rule. It's the only prompt in the pack, and the answer is remembered at sync time.
+
+| Mode | When a discovery sub-agent is spawned without KB findings | Pick it when |
+|---|---|---|
+| `warn` *(default)* | Claude gets a reminder; the agent runs anyway | You want the nudge, never an interruption |
+| `enforce` | The spawn is denied, naming what's missing and how to retry | You want the rule actually held |
+| `observe` | Nothing is said, the decision is logged | You want to see how often it would fire before switching it on |
+| `off` | Nothing at all — no gating, no sub-agent briefing | You've opted out; the instruction stays in `CLAUDE.local.md`, nothing checks it |
+
+`enforce` cannot wedge a session: denials are budgeted per turn, so a spawn always gets through eventually even if the rule is never satisfied. Every mode except `off` also briefs discovery sub-agents at startup and records its decisions to `.claude/.kb-gate.log`.
+
+To change the answer later, re-run `mcs sync` — the mode is baked into the installed hook, not read from a setting at runtime.
 
 ---
 
@@ -53,6 +71,7 @@ flowchart LR
 | **memory-audit** (skill) | Reviews existing memories and flags stale or duplicate entries to keep the KB lean |
 | **sync-memories.sh** (hook) | Indexes/re-indexes memories on session start and when they change mid-session |
 | **continuous-learning-activator.sh** (hook) | Reminds Claude to check for extractable knowledge after each prompt |
+| **kb-gate.sh** (hook) | Keeps the KB lookup ahead of delegated discovery: warns or blocks when a sub-agent is spawned without the findings in its prompt, and tells discovery sub-agents the KB exists so they search it instead of sweeping files blind |
 | `autoMemoryEnabled: false` (setting) | Disables Claude Code's built-in memory in favor of this system |
 
 Memories come in two flavors, both stored as version-controlled, human-readable markdown:
@@ -70,7 +89,8 @@ memory/
 ├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
 │   ├── sync-memories.sh                 # Ollama health + memory indexing/reindexing
-│   └── continuous-learning-activator.sh # Knowledge extraction reminder
+│   ├── continuous-learning-activator.sh # Knowledge extraction reminder
+│   └── kb-gate.sh                       # Keeps KB lookups ahead of delegated discovery
 ├── skills/
 │   ├── continuous-learning/             # Extraction rules + memory templates
 │   └── memory-audit/                    # Audit workflow (KEEP/DROP/UPDATE)
