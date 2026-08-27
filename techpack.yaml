@@ -274,6 +274,7 @@ components:
 # Ignore — maintainer-only files not shipped with the pack
 # ---------------------------------------------------------------------------
 ignore:
+  - CLAUDE.md
   - SYNC-BLOCKS.md
   - tests/
 
