@@ -59,6 +59,31 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 
 ---
 
+## Block 4: Forcing-function test
+
+Locations:
+- `skills/continuous-learning/SKILL.md` — inside Step 1, Stage A
+- `skills/memory-audit/SKILL.md` — criterion B.1
+
+Capture frames the failure as "skip", audit as "DROP"; both verbs stay outside the fence.
+
+```markdown
+<!-- SYNC:forcing-function -->
+**The forcing-function test.** *"Would a future session act differently in this project because this memory exists?"* The memory qualifies only if nothing else already drives that behavior.
+
+Four things can already be driving it, and they are not equally reliable:
+
+- **The code itself** — the current source reads correctly, and a future session consults the code, not the memory.
+- **A comment the fix left behind** — a doc comment or inline note at the cited symbol saying the same thing. Read the file; don't just grep for the symbol.
+- **An auto-loaded instruction file** — `CLAUDE.md` / `AGENTS.md` load every session, so a rule written there does displace the memory.
+- **A mechanical enforcer, but only where it actually gates.** Read a lint rule's `severity:` *and* how CI treats it: a `warning` blocks under warnings-as-errors or a zero-warning threshold, and is advisory otherwise. An installed skill loads only when its description matches the task, so it displaces nothing for work that never triggers it. Version control records the history only where the project is under version control at all.
+
+Presence is not redundancy — ask which of them would actually fire on the work this memory covers. And none of them can carry the **wrong turn**: the approach tried and rejected, the fix that looks obvious and silently no-ops, why the wrong pattern keeps reappearing. Where the mechanism is redundant but the wrong turn is not, keep the warning and cut the rest.
+<!-- /SYNC -->
+```
+
+---
+
 ## Drift verification (CI-ready)
 
 ```sh
@@ -68,7 +93,7 @@ A=skills/continuous-learning/SKILL.md
 B=skills/memory-audit/SKILL.md
 C=SYNC-BLOCKS.md
 overall=0
-for tag in capture-rules strip-the-anchors applies-to; do
+for tag in capture-rules strip-the-anchors applies-to forcing-function; do
   echo "=== $tag ==="
   tag_fail=0
   for f in "$A" "$B" "$C"; do

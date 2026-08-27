@@ -50,7 +50,7 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 Evaluate each memory against the criteria below, grouped into three:
 
 - **Group A** mirrors the Capture Rules (the same gates a memory had to pass at save time). A memory that violates any of these now is a candidate for UPDATE or DROP — even if it slipped through capture.
-- **Group B** is the audit's own gate: the forcing-function test. Capture cannot test it because only audit sees how a memory has aged. This is where past audits drifted into KEEP-by-default; apply it with teeth.
+- **Group B** re-applies the forcing-function test capture already ran — but against a codebase that has since moved. A memory can pass at save time and fail here once the code, a comment, or an instruction file caught up. This is where past audits drifted into KEEP-by-default; apply it with teeth.
 - **Group C** are audit-only mechanics — tests that depend on the current state of the codebase, the KB as a whole, or time elapsed since capture.
 
 ### Group A — Capture Rules, restated
@@ -78,14 +78,30 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Spot-check the repo — **codebase usage is the strongest single signal**. If the declared pattern is demonstrably present in existing code, the memory is a pattern even without a written rule. If the codebase is inconsistent and there's no config/doc/agreement, it is a preference.
 - **Verdict:** DROP when no evidence exists anywhere. UPDATE when the pattern is real (visible in code, or the user confirms a team agreement) but the memory is phrased as personal taste; rewrite to point at the actual evidence.
 
-### Group B — The audit's own gate
+### Group B — The forcing-function gate, re-applied
 
 #### B.1 Actionability — the forcing-function test
-- **Primary test:** *"Would a future session act differently in this codebase because this memory exists?"* If the answer is "no, the code itself or `git log` already conveys it" → DROP.
+
+A memory that fails the test below → DROP.
+
+<!-- SYNC:forcing-function -->
+**The forcing-function test.** *"Would a future session act differently in this project because this memory exists?"* The memory qualifies only if nothing else already drives that behavior.
+
+Four things can already be driving it, and they are not equally reliable:
+
+- **The code itself** — the current source reads correctly, and a future session consults the code, not the memory.
+- **A comment the fix left behind** — a doc comment or inline note at the cited symbol saying the same thing. Read the file; don't just grep for the symbol.
+- **An auto-loaded instruction file** — `CLAUDE.md` / `AGENTS.md` load every session, so a rule written there does displace the memory.
+- **A mechanical enforcer, but only where it actually gates.** Read a lint rule's `severity:` *and* how CI treats it: a `warning` blocks under warnings-as-errors or a zero-warning threshold, and is advisory otherwise. An installed skill loads only when its description matches the task, so it displaces nothing for work that never triggers it. Version control records the history only where the project is under version control at all.
+
+Presence is not redundancy — ask which of them would actually fire on the work this memory covers. And none of them can carry the **wrong turn**: the approach tried and rejected, the fix that looks obvious and silently no-ops, why the wrong pattern keeps reappearing. Where the mechanism is redundant but the wrong turn is not, keep the warning and cut the rest.
+<!-- /SYNC -->
+
+Further audit-specific cautions:
+
 - Can a future session **act on** this memory to avoid a mistake or follow a convention? Or is it purely descriptive/documentary with no clear "do this, not that" takeaway?
 - **Fact-check ≠ actionability.** A claim being *true* and *project-specific* is not enough. Many memories pass A.1 (real anchors) and C.4 (claims still verifiable) but still fail this one — historical records, shipped naming decisions, one-time bug fixes whose fix is self-evident in the code. Apply both passes; do not conflate them.
 - **Bias check.** If you find yourself defending KEEP with "it's project-specific and still accurate" without identifying the *behavior change* it drives, that's the leniency trap. KEEP requires a positive answer to the forcing-function test, not just absence of a reason to drop.
-- **Something else may already be carrying it.** The code, a comment the fix left behind, or the auto-loaded instructions each dissolve a KEEP on their own. Check all three before answering yes — mechanics in C.4.
 
 ### Group C — Audit-only mechanics
 
@@ -101,7 +117,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Search the existing knowledge base or memory files for semantically similar content — two memories may use different names but cover the same ground.
 
 #### C.3 Quality
-- Does the memory follow the standard templates? (Problem/Trigger/Solution/Verification/Example for learnings; Decision/Context/Options/Choice/Consequences for ADR decisions; Decision/Rationale/Examples for simplified decisions)
+- Is the memory structurally complete for its kind — a learning carrying the problem, the trigger, the resolution and evidence it worked; a decision carrying the choice, the reasoning and what it costs? Judge completeness, not exact heading names: the capture skill owns the templates, and their headings change without this file knowing.
 - Is the content specific enough to be useful but general enough to be reusable?
 - Are code examples still accurate?
 
@@ -125,9 +141,9 @@ git log --all --oneline --name-only -S '<Symbol>' -- . ':(exclude).claude/memori
 git branch -a --contains <sha-from-step-2>   # which branch holds it
 ```
 
-**The order is what makes the verdicts exclusive.** A bare `--all` can return several pickaxe commits at once — a symbol added and removed on the default branch long ago *and* reintroduced on a live feature branch — and then the first two rows below both match, with the verdict decided by whichever commit you happened to test. Asking the default branch on its own removes that choice.
+**The order is what makes the verdicts exclusive.** A bare `--all` can return several pickaxe commits at once — removed on the default branch long ago, reintroduced on a live feature branch — and then the first two rows below both match, the verdict decided by whichever commit you happened to test.
 
-The pathspec and `--name-only` are not optional either. `-S` counts a string's occurrences in **any** tracked file, prose included — and memories are committed to the project repo unless someone gitignored them or moved them to a separate one. Without the exclusion, a memory naming a fictional API confirms that API as real code history, and the audit reports a *fabricated* rationale ("it shipped, then was removed") into the approval gate. Read the changed filenames before trusting a match: a hit that touches only docs is prose, not code.
+The pathspec and `--name-only` are not optional either. `-S` counts a string in **any** tracked file, prose included, and memories are committed to the project repo unless gitignored or kept separately — so without the exclusion a memory naming a fictional API confirms it as real history, feeding a *fabricated* rationale into the approval gate. A hit touching only docs is prose, not code.
 
 | Finding | Verdict |
 |---|---|
@@ -137,12 +153,6 @@ The pathspec and `--name-only` are not optional either. `-S` counts a string's o
 | Not a git repo, or the clone can't be trusted (shallow, no remote, fetch failed) | **Never DROP on this basis.** Report the symbol as unverifiable and let the user decide — Step 4's UPDATE-uncertain path |
 
 Where the repo has a remote and the network is reachable, fetch first (`git fetch --all`) — `--all` sees only refs already present, so an unfetched branch reads as "never existed." Skip the fetch when there is no remote, and never read a fetch failure as confirmation.
-
-**Check what already carries the memory's content (B.1).** Two carriers are easy to miss:
-- **A comment the fix left in the source.** A landed fix often left a doc comment or inline note saying the same thing — read the cited file, don't just grep for the symbol.
-- **Another instruction source — but weigh how reliably each one fires.** `CLAUDE.md` / `AGENTS.md` load every session, so a rule written there does displace the memory. A **lint rule** displaces it only if the rule actually gates: read the `severity:` *and* how CI treats it, since a `warning` blocks under warnings-as-errors or a zero-warning threshold and is advisory otherwise. An **installed skill** loads only when its description matches the task at hand, so it displaces nothing for work that never triggers it. Grep all three, then ask which would actually fire on the work this memory covers — presence is not redundancy.
-
-Neither carrier can hold the **wrong turn**: the approach tried and rejected, the fix that looks obvious and silently no-ops, why the wrong pattern keeps reappearing. When the mechanism is redundant but the wrong turn isn't, trim to that warning instead of dropping the file.
 
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
@@ -158,7 +168,7 @@ Neither carrier can hold the **wrong turn**: the approach tried and rejected, th
 
 ## DROP Categories — recurring patterns that should not need user pushback
 
-Categories A–H are the recurring concrete shapes of B.1 (forcing-function) failure. Category I is different in kind — a C.4 falsification, where the memory *would* change behavior, wrongly. When a memory matches one, the analysis is already done — call DROP without hedging. None of these are "in doubt" cases.
+Categories A–H are the recurring concrete shapes of B.1 (forcing-function) failure. Category I is different in kind — a C.4 falsification, where the memory *would* change behavior, wrongly. When a memory matches one, the analysis is already done — call DROP without hedging. Two carve-outs: category I still needs an explicit callout rather than a routine drop, and category B does not apply at all in a project without version control.
 
 ### A. Self-marked superseded / deferred / abandoned
 - The memory itself says **SUPERSEDED**, **deferred indefinitely**, **closed without implementation**, **path abandoned**, or points at another memory as the current decision.
@@ -223,7 +233,7 @@ If the directory is missing or empty, report the situation (specify whether it d
 ### Step 2: Batch Assessment
 
 **Fact-check first, verdict second.** Before producing the verdict table for a batch, run a single grep pass against the codebase for the central claims (symbol names, file paths, type names) referenced across the batch. Verdicts that rest on unverified claims are guesses dressed up as analysis. Specifically:
-- Grep for every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
+- Grep for every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions. Where a symbol returns zero hits, resolve it through the C.4 triage before assigning any verdict; an empty grep is not a finding on its own.
 - Spot-check any line numbers and historical line counts; flag stale ones for UPDATE.
 - Watch for `Applies to:` typos (e.g. `mcs-2` when the project is `mcs`) — quick one-line fixes.
 
@@ -270,6 +280,8 @@ Respect every override without arguing — the user knows their workflow better 
 
 Run only after Step 3 has produced an explicit approval (or per-item decisions) for *this* batch. Apply the user's decisions, not the originally proposed verdicts when they differ.
 
+Read [references/execution.md](references/execution.md) before the first batch's edits land. It covers link-repair ordering, what to verify in the parts you KEEP, and the rules for delegating batches to subagents — each one a way a real audit has damaged the KB it was cleaning.
+
 - **DROP**: Delete the file with `Bash(rm <path>)`
 - **UPDATE (rename)**: Rename with `Bash(mv <old> <new>)`
 - **UPDATE (content)**: Use `Edit` or `Write` to update the file
@@ -279,8 +291,6 @@ Run only after Step 3 has produced an explicit approval (or per-item decisions) 
 **Stop at the filesystem.** Those file operations are the whole job — never `git add`, commit, or push memory changes. A KB may be tracked in the project's own repo, kept in a separate repo with its own propagation rules, or gitignored and purely local; the audit cannot tell which, and in some setups committing bypasses an approval step. Leave the working tree to the user.
 
 Report what was done after each batch.
-
-Read [references/execution.md](references/execution.md) before the first batch's edits land. It covers link-repair ordering, what to verify in the parts you KEEP, and the rules for delegating batches to subagents — each one a way a real audit has damaged the KB it was cleaning.
 
 ### Step 5: Summary
 
@@ -304,10 +314,5 @@ Knowledge base reduced from 42 → 34 files.
 
 ## Guidelines
 
-- **Never delete or edit without explicit per-batch approval.** Print the verdict table, then stop. Do not run any tool until the user replies for *this* batch — silence is not consent, and approval of an earlier batch does not carry forward.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
-- **Apply criteria with teeth, not deference.** Past audits drifted into KEEP-by-default because each memory had *some* tie to the project. The forcing-function test (B.1) is the correction: KEEP requires identifying behavior the memory drives, not just absence of error. When the DROP categories above match, call DROP — don't soften it to UPDATE or stash in KEEP "to be safe."
-- **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job.
-- **Watch for the "but it's true and project-specific" trap.** That sentence is A.1 and C.4 passing — it says nothing about B.1. Two-pass thinking: first verify, then ask "does this change behavior?"
-- **Batch size matters.** 10-15 per batch keeps the review manageable.
-- **End-of-audit check for broken cross-links.** After DROPs land, grep `Related:` / `References:` lines for any pointer to a deleted filename and clean those up — broken refs accumulate silently otherwise.
+- **In genuine doubt, prefer DROP with rationale over silent KEEP.** The asymmetry is the point: a KEEP that should have been DROP rarely gets revisited, while a proposed DROP gets debated and resolved in seconds. The user can always override.

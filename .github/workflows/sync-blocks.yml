@@ -34,7 +34,7 @@ jobs:
           B=skills/memory-audit/SKILL.md
           C=SYNC-BLOCKS.md
           overall=0
-          for tag in capture-rules strip-the-anchors applies-to; do
+          for tag in capture-rules strip-the-anchors applies-to forcing-function; do
             echo "=== $tag ==="
             tag_fail=0
             for f in "$A" "$B" "$C"; do
