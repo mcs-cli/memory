@@ -6,14 +6,21 @@ sections of `SKILL.md` — the criteria are the skill's spine and stay short eno
 
 ## Applying the edits
 
-1. **Repair inbound links *before* deleting, and rename *before* repointing.** Find referrers with
-   `grep -rl '<memory-name>' <memories-dir>` first. A rename invalidates any link you just wrote at
-   the old name, so when a batch contains both a rename and a repoint, do the rename first. The KB
-   should be consistent after every step, not only at the end.
+1. **Never leave a broken link behind, not even between two steps.** Find the referrers first with
+   `grep -rl '<memory-name>' <memories-dir>`. To rename: copy to the new name, repoint every referrer,
+   *then* delete the old file. In that order the KB is consistent after each step, so an interrupted
+   audit leaves a duplicate at worst, never a dangling pointer. `mv` cannot give you that — it breaks
+   inbound links the moment it runs, while repointing first writes links to a name that does not exist
+   yet. To delete: repair the referrers before removing the file.
 
-2. **Replace a dropped memory's inbound pointer with the corrected fact inline** — don't just delete
-   the bullet. The referrer then carries what the code actually does, which is strictly more useful
-   than the dead pointer was, and it preserves the verified half of the memory being removed.
+2. **What replaces an inbound pointer depends on why the memory was dropped.** Only the first case
+   calls for inlining anything:
+   - **Falsified (category I)** — write the corrected fact into the referrer. It then carries what the
+     code actually does, which is more useful than the dead pointer was, and it preserves the verified
+     half of the memory being removed.
+   - **Superseded or duplicated (A, H)** — repoint at the surviving memory. Do not copy content across.
+   - **Dropped as valueless (B–G)** — delete the pointer. There is no fact to salvage, and inlining
+     content from a memory just judged not worth keeping quietly undoes that decision.
 
 3. **Verify the symbols in the parts you KEEP, not just the parts you cut.** When trimming a memory it
    is natural to fact-check the claims being deleted and trust the ones being carried forward — which

@@ -114,26 +114,33 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 
 **A symbol with zero hits is not one finding — it is three, with three different verdicts.** Never stop at "the grep came back empty." Resolve which case you are in first — but only where the project is a git repo, which is not a given: **check `git rev-parse --git-dir` succeeds before running any of this.**
 
+Query the default branch first, and widen only if it comes back empty:
+
 ```bash
+# 1. Did it ever exist on the default branch?
+git log <default-branch> --oneline --name-only -S '<Symbol>' -- . ':(exclude).claude/memories'
+
+# 2. Only if step 1 is empty — does any other ref carry it?
 git log --all --oneline --name-only -S '<Symbol>' -- . ':(exclude).claude/memories'
-git merge-base --is-ancestor <sha> <default-branch>   # ...is that ref merged?
-git branch -a --contains <sha>                        # ...if not, which branch holds it?
+git branch -a --contains <sha-from-step-2>   # which branch holds it
 ```
 
-The pathspec and `--name-only` are not optional. `-S` counts a string's occurrences in **any** tracked file, prose included — and memories are committed to the project repo unless someone gitignored them or moved them to a separate one. Without the exclusion, a memory naming a fictional API confirms that API as real code history, and the audit reports a *fabricated* rationale ("it shipped, then was removed") into the approval gate. Read the changed filenames before trusting a match: a hit that touches only docs is prose, not code.
+**The order is what makes the verdicts exclusive.** A bare `--all` can return several pickaxe commits at once — a symbol added and removed on the default branch long ago *and* reintroduced on a live feature branch — and then the first two rows below both match, with the verdict decided by whichever commit you happened to test. Asking the default branch on its own removes that choice.
+
+The pathspec and `--name-only` are not optional either. `-S` counts a string's occurrences in **any** tracked file, prose included — and memories are committed to the project repo unless someone gitignored them or moved them to a separate one. Without the exclusion, a memory naming a fictional API confirms that API as real code history, and the audit reports a *fabricated* rationale ("it shipped, then was removed") into the approval gate. Read the changed filenames before trusting a match: a hit that touches only docs is prose, not code.
 
 | Finding | Verdict |
 |---|---|
-| Commits touch **source** and `--is-ancestor` succeeds → it shipped, then was removed | **DROP** (cat D) — the code is gone; the memory is a historical record |
-| Commits touch source but `--is-ancestor` fails → the code is on an unmerged branch | **UPDATE**, not DROP. Add a status header naming the branch and stating the default branch's *current* values, so the memory is useful either way and self-corrects when the branch merges |
-| No commit touches source → the API never existed here | **DROP** — see DROP category I |
+| Step 1 returns commits touching **source** → it shipped, then was removed | **DROP** (cat D) — the code is gone; the memory is a historical record |
+| Step 1 empty, step 2 returns commits touching source → the code is on an unmerged branch | **UPDATE**, not DROP. Add a status header naming the branch and stating the default branch's *current* values, so the memory is useful either way and self-corrects when the branch merges |
+| Both steps empty — no commit touches source → the API never existed here | **DROP** — see DROP category I |
 | Not a git repo, or the clone can't be trusted (shallow, no remote, fetch failed) | **Never DROP on this basis.** Report the symbol as unverifiable and let the user decide — Step 4's UPDATE-uncertain path |
 
 Where the repo has a remote and the network is reachable, fetch first (`git fetch --all`) — `--all` sees only refs already present, so an unfetched branch reads as "never existed." Skip the fetch when there is no remote, and never read a fetch failure as confirmation.
 
 **Check what already carries the memory's content (B.1).** Two carriers are easy to miss:
 - **A comment the fix left in the source.** A landed fix often left a doc comment or inline note saying the same thing — read the cited file, don't just grep for the symbol.
-- **The auto-loaded instructions** — `CLAUDE.md` / `AGENTS.md`, a lint config, an installed skill. A rule written into those no longer changes behavior on its own. Grep them before deciding, and check the lint rule's `severity:` — a `warning` does not block a PR, so "enforced mechanically" may be false, which flips the verdict from DROP back to UPDATE.
+- **Another instruction source — but weigh how reliably each one fires.** `CLAUDE.md` / `AGENTS.md` load every session, so a rule written there does displace the memory. A **lint rule** displaces it only if the rule actually gates: read the `severity:` *and* how CI treats it, since a `warning` blocks under warnings-as-errors or a zero-warning threshold and is advisory otherwise. An **installed skill** loads only when its description matches the task at hand, so it displaces nothing for work that never triggers it. Grep all three, then ask which would actually fire on the work this memory covers — presence is not redundancy.
 
 Neither carrier can hold the **wrong turn**: the approach tried and rejected, the fix that looks obvious and silently no-ops, why the wrong pattern keeps reappearing. When the mechanism is redundant but the wrong turn isn't, trim to that warning instead of dropping the file.
 
