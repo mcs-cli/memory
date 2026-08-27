@@ -271,7 +271,8 @@ components:
       - ".claude/.kb-gate.log"
 
 # ---------------------------------------------------------------------------
-# Ignore — maintainer-only files not shipped with the pack
+# Ignore — suppress update notifications for changes to maintainer-only files.
+# Does not affect what installs; that is decided by the components above.
 # ---------------------------------------------------------------------------
 ignore:
   - CLAUDE.md
