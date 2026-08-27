@@ -85,6 +85,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Can a future session **act on** this memory to avoid a mistake or follow a convention? Or is it purely descriptive/documentary with no clear "do this, not that" takeaway?
 - **Fact-check ≠ actionability.** A claim being *true* and *project-specific* is not enough. Many memories pass A.1 (real anchors) and C.4 (claims still verifiable) but still fail this one — historical records, shipped naming decisions, one-time bug fixes whose fix is self-evident in the code. Apply both passes; do not conflate them.
 - **Bias check.** If you find yourself defending KEEP with "it's project-specific and still accurate" without identifying the *behavior change* it drives, that's the leniency trap. KEEP requires a positive answer to the forcing-function test, not just absence of a reason to drop.
+- **Something else may already be carrying it.** The code, a comment the fix left behind, or the auto-loaded instructions each dissolve a KEEP on their own. Check all three before answering yes — mechanics in C.4.
 
 ### Group C — Audit-only mechanics
 
@@ -108,22 +109,46 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - **Verify key claims against the codebase.** If a memory says "we use pattern X in module Y," search the code to confirm that pattern still exists.
 - Use `Grep` to check for symbol names, type names, or patterns referenced in the memory.
 - Use `Glob` to verify that referenced files or modules still exist.
-- If a memory describes a convention (e.g., "all repositories conform to protocol X"), spot-check a few cases to confirm it holds.
+- If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
 
+**A symbol with zero hits is not one finding — it is three, with three different verdicts.** Never stop at "the grep came back empty." Resolve which case you are in first:
+
+```bash
+git log --all --oneline -S '<Symbol>'                 # does it exist on ANY ref?
+git merge-base --is-ancestor <sha> <default-branch>   # ...and is that ref merged?
+git branch -a --contains <sha>                        # ...if not, which branch holds it?
+```
+
+| Finding | Verdict |
+|---|---|
+| Commits exist and `--is-ancestor` succeeds → it shipped, then was removed | **DROP** (cat D) — the code is gone; the memory is a historical record |
+| Commits exist but `--is-ancestor` fails → the code is on an unmerged branch | **UPDATE**, not DROP. Add a status header naming the branch and stating the default branch's *current* values, so the memory is useful either way and self-corrects when the branch merges |
+| No commits on any ref → the API never existed here | **DROP** — see DROP category I |
+
+`--all` only sees refs present in this clone, so **run `git fetch --all` first**: an unfetched or never-fetched branch otherwise reads as "never existed," which is the one verdict here that destroys a still-valid memory.
+
+**Check what already carries the memory's content (B.1).** Two carriers are easy to miss:
+- **A comment the fix left in the source.** A landed fix often left a doc comment or inline note saying the same thing — read the cited file, don't just grep for the symbol.
+- **The auto-loaded instructions** — `CLAUDE.md` / `AGENTS.md`, a lint config, an installed skill. A rule written into those no longer changes behavior on its own. Grep them before deciding, and check the lint rule's `severity:` — a `warning` does not block a PR, so "enforced mechanically" may be false, which flips the verdict from DROP back to UPDATE.
+
+Neither carrier can hold the **wrong turn**: the approach tried and rejected, the fix that looks obvious and silently no-ops, why the wrong pattern keeps reappearing. When the mechanism is redundant but the wrong turn isn't, trim to that warning instead of dropping the file.
+
 #### C.5 Staleness Signals
-- **Line number references** — e.g., `lines 266-296` or `FileName.swift:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
+- **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
 - **Deep file paths** — full nested paths are fragile. Recommend UPDATE to use module-level references unless the path is stable and well-known.
 - **Transient details** — feature flag names being removed, in-progress PR numbers, temporary workarounds with known expiry.
 - References to features or files that may have been removed or heavily refactored.
 - **Broken `Related:` links** — an entry in the memory's `Related:` section that points at a memory filename no longer present (DROP'd or renamed during a previous audit). Recommend UPDATE to fix the link to its new name or remove the entry.
+- **A stated open item that has since shipped** — a section headed "Open", "Still open", "Known TODO", "remaining item for the wiring phase", or an "Open Design Decisions" list. Check each entry against the code. A resolved item still listed as open is worse than an absent memory: it reads as pending work and invites someone to redo it. Recommend UPDATE to delete the entry (and note the resolution if it is non-obvious).
+- **A transcribed per-instance value** — a constant, enum case, or per-call-site setting copied into the memory. These rot fastest of all, and one that has already been corrected once will usually be wrong again. Recommend UPDATE to keep only the *rule* that makes the value matter, pointing at the source to read the value itself.
 - Old dates without timeless content — treat as a signal for closer scrutiny, not an automatic DROP.
 
 ---
 
 ## DROP Categories — recurring patterns that should not need user pushback
 
-The categories below are the recurring concrete shapes of B.1 (forcing-function) failure. When a memory matches one, the analysis is already done — call DROP without hedging. None of these are "in doubt" cases.
+Categories A–H are the recurring concrete shapes of B.1 (forcing-function) failure. Category I is different in kind — a C.4 falsification, where the memory *would* change behavior, wrongly. When a memory matches one, the analysis is already done — call DROP without hedging. None of these are "in doubt" cases.
 
 ### A. Self-marked superseded / deferred / abandoned
 - The memory itself says **SUPERSEDED**, **deferred indefinitely**, **closed without implementation**, **path abandoned**, or points at another memory as the current decision.
@@ -138,7 +163,7 @@ The categories below are the recurring concrete shapes of B.1 (forcing-function)
 - Keep only when the rule has *no* enforcer (no lint, no formatter, no compiler check) and the codebase actually depends on humans following it.
 
 ### D. One-time bug fixes whose fix is self-evident in the code now
-- "Bug X used `dropFirst()`; we changed to `where index != firstIndex`." The fix is a 2-line diff, the code reads correctly today. A future regressor would not consult the memory; the existing code is the documentation.
+- "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity." The fix is a two-line diff and the code reads correctly today. A future regressor would not consult the memory; the existing code is the documentation.
 - Keep only when the bug class is *recurring* (same pattern in multiple places, or a footgun future code might re-introduce) and the memory teaches the *avoidance pattern*, not the one fix.
 
 ### E. Generic engineering wisdom dressed up with one project example
@@ -155,6 +180,14 @@ The categories below are the recurring concrete shapes of B.1 (forcing-function)
 
 ### H. Tiny / narrow learnings whose scope is fully covered by a sibling memory
 - A 30-line learning that captures one facet of a 200-line learning next to it. Cross-reference and DROP the smaller one, or merge.
+
+### I. Confidently wrong about what ships — **flag this one loudly**
+Not a staleness problem: the memory is false. A session that trusts it will delete working code or hunt an API that isn't there. Two shapes:
+
+- **Contradicts the code.** A prohibition or settled fact the current code refutes — *"X was tried and removed, do not re-add it"* while X is live with an active consumer; *"this must stay a synchronous call"* where the shipped code is async; a warning about a gating hole since closed.
+- **Prescribes an API that exists on no ref.** A helper, hook, or parameter in the present tense — *"hiding has to be a caller-implemented hook `setFooHidden()`"* — that appears in no file and in no commit (C.4, after a fetch). The intended design was recorded as though it had shipped, and there is no branch to point at, so a reader cannot discover the memory is fiction. Worst when it says "reuse this instead of building your own" — that actively blocks the correct action.
+
+Do not file either as a routine drop: call it out in the verdict table with what the code actually does now. These memories often pair a real finding with a wrong one, so salvage any *verified observation* into a sibling before deleting — and where the memory has inbound links, replace them with the corrected fact rather than merely unlinking (see `references/execution.md`).
 
 ---
 
@@ -233,6 +266,8 @@ Run only after Step 3 has produced an explicit approval (or per-item decisions) 
 - **UPDATE (uncertain)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
 
 Report what was done after each batch.
+
+Read [references/execution.md](references/execution.md) before the first batch's edits land. It covers link-repair ordering, what to verify in the parts you KEEP, and the rules for delegating batches to subagents — each one a way a real audit has damaged the KB it was cleaning.
 
 ### Step 5: Summary
 
