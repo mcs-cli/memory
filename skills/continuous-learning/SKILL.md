@@ -129,6 +129,14 @@ Decide what to do, in this order of preference:
 
 Use `Related:` for memories that share root causes, build on each other, contradict each other, or supersede older decisions. Don't cross-link every vaguely overlapping memory.
 
+**Log the outcome in one line before moving on.** An unlogged search is indistinguishable from a skipped one — the same reason the Step 4 checks print their work. Duplicates that slip past here are what an audit later has to clean up.
+
+```
+KB search: "<query>" -> <n> hits, <what they covered> -> <branch taken, and the file edited or created>
+```
+
+e.g. `KB search: "retry backoff" -> 2 hits, both on request timeouts -> branch 3, new memory, Related: learning_networking_timeout_tuning`
+
 ### Step 3: Research (When Appropriate)
 
 **For general topics** — search available documentation sources first (the user may have MCP servers providing official docs for frameworks or libraries), then fall back to web search:
