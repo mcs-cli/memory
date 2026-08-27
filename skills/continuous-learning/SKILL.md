@@ -252,7 +252,7 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 1. Review conversation history for extractable knowledge.
 2. Search existing memories following Step 2 of the Extraction Workflow.
 3. Filter candidates through the Capture Rules. Drop anything that fails Rule 1 (no project tie), Rule 2 (names an engineer), or Rule 3 (preference without project evidence).
-4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks.
+4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks. The cap is deliberate: a long session can yield many qualifying memories, and three is the most worth adding at once — the gates decide what is eligible, the cap decides how many land per session. Note any you set aside.
 5. Report what was created and why in a brief summary.
 
 ---
