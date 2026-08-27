@@ -82,7 +82,7 @@ After completing any task, evaluate in two stages.
 - Did this require non-obvious investigation or debugging?
 - Was a choice made about architecture, patterns, or approach?
 - Is there an established project convention worth documenting?
-- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the code, `git log`, lint, or the formatter already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
+- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the current code or a mechanical check already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
 
 If the forcing-function gate fails, or no other prompt answers yes → skip. Otherwise continue to Stage B.
 
@@ -184,7 +184,7 @@ Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<s
 
 ## Quality Gates
 
-> Capture Rules are gated in **Stage B** above; do not re-evaluate them here. This checklist covers formatting, quality, staleness, and security only — different concerns.
+> Capture Rules are gated in **Stage B** above; do not re-evaluate them here. This checklist covers formatting, quality, and security only — different concerns.
 
 Before saving any memory, verify:
 - [ ] Name follows the correct pattern (`learning_` or `decision_<domain>_`)
@@ -193,9 +193,7 @@ Before saving any memory, verify:
 - [ ] Content is specific enough to be actionable
 - [ ] Content is general enough to be reusable
 - [ ] No sensitive information (credentials, internal URLs)
-- [ ] Does not duplicate existing memories
 - [ ] References included if external sources were consulted
-- [ ] No brittle references that rot quickly (see Staleness Prevention below)
 
 ### Do Not Save
 
@@ -209,11 +207,11 @@ Anti-examples, generalized — do not create memories like these:
 | Public API reference | "Public Git hosting API rate limit is N/hr authenticated" | **[Rule 1]** Public API docs cover this — no project-specific twist. |
 | Personal identifier | Problem section narrates a specific engineer hitting a cache bug | **[Rule 2]** Names an engineer. |
 | Personal preference without project evidence | "Prefer early returns" with no lint rule, consistent codebase usage, or team agreement | **[Rule 3]** Taste, not pattern. |
-| Historical record of a one-time shipped change | "We renamed folder `Install/` to `Sync/` after the command rename" | **[Forcing-function]** Once shipped, `git log` answers this. Future sessions read the current code, not the migration story. The memory drives no future behavior. |
+| Historical record of a one-time shipped change | "We renamed folder `Install/` to `Sync/` after the command rename" | **[Forcing-function]** Once shipped, `git log` answers this. Future sessions read the current code, not the migration story. Assumes version control holds the history — without it nothing else records the change. |
 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance" with one PR cited | **[Rule 1]** Strip the example — what is left is universal advice that fits any project. Belongs in a coding-style doc, not a per-project KB. |
 | One-line rule that belongs in CLAUDE.md | A single-sentence convention with no Context / Options / Consequences | **[Scope]** If it fits in one bullet under "Conventions" in CLAUDE.md, put it there. A standalone memory file is overhead for content that cannot grow. |
 | Naming/prefix decision once enforced | "We kept the `External` prefix on adapter types" | **[Forcing-function]** Once the type system, lint, or formatter enforces it, the decision lives in the code. Future sessions read the code, not the memory. |
-| One-time bug fix self-evident in current code | "Bug X used `dropFirst()`; we changed to a guarded check" | **[Forcing-function]** The fix is a small diff; the code reads correctly today. Save only if the bug class is recurring and the memory teaches the *avoidance pattern*, not the one fix. |
+| One-time bug fix self-evident in current code | "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity" | **[Forcing-function]** The fix is a small diff; the code reads correctly today. Save only if the bug class is recurring and the memory teaches the *avoidance pattern*, not the one fix. |
 | Research artifact for deferred or dormant work | "Cross-platform audit / options-considered for feature X (deferred indefinitely)" | **[Forcing-function]** Useful when the work resumes — but it belongs in a planning doc or `docs/`, not the memory KB. The KB is for things that change how a session works on the active codebase today. |
 
 **Internal docs are fair game.** A memory summarizing a Confluence page, ADR, RFC, or team-wiki entry is project knowledge — those sources aren't "documentation anyone can look up." Always include the source URL in `References:` so the memory points at the canonical version and readers can check for drift.
@@ -235,11 +233,11 @@ Before saving, check memory content against these rules:
 
 - **No line numbers.** Reference symbols (types, functions, methods) instead — they survive refactors.
 - **Prefer module-level paths** over deep file paths. Use full paths only for stable, well-known files.
-- **Use semantic anchors** — method signatures, protocol names, and architectural concepts are durable.
+- **Use semantic anchors** — method signatures, interface and type names, and architectural concepts are durable.
 - **Omit transient details** — feature flags being removed, in-progress PR numbers, temporary workarounds.
 
-**Good:** `SessionManager.refreshToken(forceExpiry:)` in the `Auth` module
-**Bad:** `SessionManager.swift:142` at `Sources/Features/Auth/Session/SessionManager.swift`
+**Good:** `SessionManager.refreshToken` in the `Auth` module
+**Bad:** `src/features/auth/session/SessionManager.<ext>:142`
 
 ---
 
@@ -252,20 +250,6 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 1. Review conversation history for extractable knowledge.
 2. Search existing memories following Step 2 of the Extraction Workflow.
 3. Filter candidates through the Capture Rules. Drop anything that fails Rule 1 (no project tie), Rule 2 (names an engineer), or Rule 3 (preference without project evidence).
-4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks.
+4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks. The cap is deliberate: a long session can yield many qualifying memories, and three is the most worth adding at once — the gates decide what is eligible, the cap decides how many land per session. Note any you set aside.
 5. Report what was created and why in a brief summary.
 
----
-
-## Tool Reference
-
-| Tool | Purpose |
-|------|---------|
-| `mcp__docs-mcp-server__search_docs` | **Primary:** Semantic search across docs and memories |
-| `mcp__docs-mcp-server__list_libraries` | List indexed libraries |
-| `Glob` | **Fallback:** List all memory files (`.claude/memories/*.md`) |
-| `Read` | Read a specific memory file |
-| `Write` | Create new memory file |
-| `Edit` | Update existing memory file |
-| `Bash` | Resolve git repo name for `Applies to:` (`git remote get-url origin`) |
-| `WebSearch` | Built-in web search for general topics |
