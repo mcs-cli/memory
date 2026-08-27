@@ -41,7 +41,7 @@ The audit enforces these rules through the criteria below — see Group A.
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->
 
-**Audit-time usage.** Audit only the memories in the current checkout's `.claude/memories/` and fact-check against this project only. When deciding whether a memory targets *this* project, compare its `Applies to:` against the **git repo name**, not the directory basename — a folder rename does not change the project. Never DROP a memory solely because its `Applies to:` lists other projects. If the KB is centralized across projects via a separate mechanism, that mechanism owns its own audit — this skill does not reach across repos.
+**Audit-time usage.** Audit only the memories in this project's `.claude/memories/` and fact-check against this project only. When deciding whether a memory targets *this* project, compare its `Applies to:` against the **git repo name**, not the directory basename — a folder rename does not change the project. Never DROP a memory solely because its `Applies to:` lists other projects. If the KB is centralized across projects via a separate mechanism, that mechanism owns its own audit — this skill does not reach across repos.
 
 ---
 
@@ -112,21 +112,24 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
 
-**A symbol with zero hits is not one finding — it is three, with three different verdicts.** Never stop at "the grep came back empty." Resolve which case you are in first:
+**A symbol with zero hits is not one finding — it is three, with three different verdicts.** Never stop at "the grep came back empty." Resolve which case you are in first — but only where the project is a git repo, which is not a given: **check `git rev-parse --git-dir` succeeds before running any of this.**
 
 ```bash
-git log --all --oneline -S '<Symbol>'                 # does it exist on ANY ref?
-git merge-base --is-ancestor <sha> <default-branch>   # ...and is that ref merged?
+git log --all --oneline --name-only -S '<Symbol>' -- . ':(exclude).claude/memories'
+git merge-base --is-ancestor <sha> <default-branch>   # ...is that ref merged?
 git branch -a --contains <sha>                        # ...if not, which branch holds it?
 ```
 
+The pathspec and `--name-only` are not optional. `-S` counts a string's occurrences in **any** tracked file, prose included — and memories are committed to the project repo unless someone gitignored them or moved them to a separate one. Without the exclusion, a memory naming a fictional API confirms that API as real code history, and the audit reports a *fabricated* rationale ("it shipped, then was removed") into the approval gate. Read the changed filenames before trusting a match: a hit that touches only docs is prose, not code.
+
 | Finding | Verdict |
 |---|---|
-| Commits exist and `--is-ancestor` succeeds → it shipped, then was removed | **DROP** (cat D) — the code is gone; the memory is a historical record |
-| Commits exist but `--is-ancestor` fails → the code is on an unmerged branch | **UPDATE**, not DROP. Add a status header naming the branch and stating the default branch's *current* values, so the memory is useful either way and self-corrects when the branch merges |
-| No commits on any ref → the API never existed here | **DROP** — see DROP category I |
+| Commits touch **source** and `--is-ancestor` succeeds → it shipped, then was removed | **DROP** (cat D) — the code is gone; the memory is a historical record |
+| Commits touch source but `--is-ancestor` fails → the code is on an unmerged branch | **UPDATE**, not DROP. Add a status header naming the branch and stating the default branch's *current* values, so the memory is useful either way and self-corrects when the branch merges |
+| No commit touches source → the API never existed here | **DROP** — see DROP category I |
+| Not a git repo, or the clone can't be trusted (shallow, no remote, fetch failed) | **Never DROP on this basis.** Report the symbol as unverifiable and let the user decide — Step 4's UPDATE-uncertain path |
 
-`--all` only sees refs present in this clone, so **run `git fetch --all` first**: an unfetched or never-fetched branch otherwise reads as "never existed," which is the one verdict here that destroys a still-valid memory.
+Where the repo has a remote and the network is reachable, fetch first (`git fetch --all`) — `--all` sees only refs already present, so an unfetched branch reads as "never existed." Skip the fetch when there is no remote, and never read a fetch failure as confirmation.
 
 **Check what already carries the memory's content (B.1).** Two carriers are easy to miss:
 - **A comment the fix left in the source.** A landed fix often left a doc comment or inline note saying the same thing — read the cited file, don't just grep for the symbol.
@@ -185,7 +188,7 @@ Categories A–H are the recurring concrete shapes of B.1 (forcing-function) fai
 Not a staleness problem: the memory is false. A session that trusts it will delete working code or hunt an API that isn't there. Two shapes:
 
 - **Contradicts the code.** A prohibition or settled fact the current code refutes — *"X was tried and removed, do not re-add it"* while X is live with an active consumer; *"this must stay a synchronous call"* where the shipped code is async; a warning about a gating hole since closed.
-- **Prescribes an API that exists on no ref.** A helper, hook, or parameter in the present tense — *"hiding has to be a caller-implemented hook `setFooHidden()`"* — that appears in no file and in no commit (C.4, after a fetch). The intended design was recorded as though it had shipped, and there is no branch to point at, so a reader cannot discover the memory is fiction. Worst when it says "reuse this instead of building your own" — that actively blocks the correct action.
+- **Prescribes an API that exists on no ref.** A helper, hook, or parameter in the present tense — *"hiding has to be a caller-implemented hook `setFooHidden()`"* — that appears in no file and in no commit touching source (C.4 — a mention in prose is not evidence it shipped). The intended design was recorded as though it had shipped, and there is no branch to point at, so a reader cannot discover the memory is fiction. Worst when it says "reuse this instead of building your own" — that actively blocks the correct action.
 
 Do not file either as a routine drop: call it out in the verdict table with what the code actually does now. These memories often pair a real finding with a wrong one, so salvage any *verified observation* into a sibling before deleting — and where the memory has inbound links, replace them with the corrected fact rather than merely unlinking (see `references/execution.md`).
 
@@ -264,6 +267,8 @@ Run only after Step 3 has produced an explicit approval (or per-item decisions) 
 - **UPDATE (content)**: Use `Edit` or `Write` to update the file
 - **UPDATE (merge)**: Create the merged file, then delete the originals
 - **UPDATE (uncertain)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
+
+**Stop at the filesystem.** Those file operations are the whole job — never `git add`, commit, or push memory changes. A KB may be tracked in the project's own repo, kept in a separate repo with its own propagation rules, or gitignored and purely local; the audit cannot tell which, and in some setups committing bypasses an approval step. Leave the working tree to the user.
 
 Report what was done after each batch.
 
