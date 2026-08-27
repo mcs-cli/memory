@@ -184,7 +184,7 @@ Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<s
 
 ## Quality Gates
 
-> Capture Rules are gated in **Stage B** above; do not re-evaluate them here. This checklist covers formatting, quality, staleness, and security only — different concerns.
+> Capture Rules are gated in **Stage B** above; do not re-evaluate them here. This checklist covers formatting, quality, and security only — different concerns.
 
 Before saving any memory, verify:
 - [ ] Name follows the correct pattern (`learning_` or `decision_<domain>_`)
@@ -193,9 +193,7 @@ Before saving any memory, verify:
 - [ ] Content is specific enough to be actionable
 - [ ] Content is general enough to be reusable
 - [ ] No sensitive information (credentials, internal URLs)
-- [ ] Does not duplicate existing memories
 - [ ] References included if external sources were consulted
-- [ ] No brittle references that rot quickly (see Staleness Prevention below)
 
 ### Do Not Save
 
