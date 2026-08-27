@@ -116,6 +116,12 @@ Decide what to do, in this order of preference:
 
 Use `Related:` for memories that share root causes, build on each other, contradict each other, or supersede older decisions. Don't cross-link every vaguely overlapping memory.
 
+Print one line recording this search before continuing, matching the Step 4 checks — hidden reasoning is easy to skip, printed output is reviewable:
+
+```
+KB search: "<query>" -> <n> hits, <what they covered> -> <branch taken, and the file edited or created>
+```
+
 ### Step 3: Research (When Appropriate)
 
 **For general topics** — search available documentation sources first (the user may have MCP servers providing official docs for frameworks or libraries), then fall back to web search:
