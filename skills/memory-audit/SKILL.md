@@ -110,7 +110,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Use `Glob` to verify that referenced files or modules still exist.
 - If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
-- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, or the grep may have matched only the memory's own text. Where you cannot confirm a symbol in current source, report it as unverifiable rather than recommending DROP.
+- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, or the grep may have matched only the memory's own text. Where you cannot confirm a symbol in current source, that is the UPDATE-uncertain verdict, not DROP: say in the rationale what you could not confirm, and let the user decide.
 
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
