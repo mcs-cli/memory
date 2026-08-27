@@ -108,11 +108,11 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - **Verify key claims against the codebase.** If a memory says "we use pattern X in module Y," search the code to confirm that pattern still exists.
 - Use `Grep` to check for symbol names, type names, or patterns referenced in the memory.
 - Use `Glob` to verify that referenced files or modules still exist.
-- If a memory describes a convention (e.g., "all repositories conform to protocol X"), spot-check a few cases to confirm it holds.
+- If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
 
 #### C.5 Staleness Signals
-- **Line number references** — e.g., `lines 266-296` or `FileName.swift:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
+- **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
 - **Deep file paths** — full nested paths are fragile. Recommend UPDATE to use module-level references unless the path is stable and well-known.
 - **Transient details** — feature flag names being removed, in-progress PR numbers, temporary workarounds with known expiry.
 - References to features or files that may have been removed or heavily refactored.
@@ -138,7 +138,7 @@ The categories below are the recurring concrete shapes of B.1 (forcing-function)
 - Keep only when the rule has *no* enforcer (no lint, no formatter, no compiler check) and the codebase actually depends on humans following it.
 
 ### D. One-time bug fixes whose fix is self-evident in the code now
-- "Bug X used `dropFirst()`; we changed to `where index != firstIndex`." The fix is a 2-line diff, the code reads correctly today. A future regressor would not consult the memory; the existing code is the documentation.
+- "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity." The fix is a two-line diff and the code reads correctly today. A future regressor would not consult the memory; the existing code is the documentation.
 - Keep only when the bug class is *recurring* (same pattern in multiple places, or a footgun future code might re-introduce) and the memory teaches the *avoidance pattern*, not the one fix.
 
 ### E. Generic engineering wisdom dressed up with one project example
