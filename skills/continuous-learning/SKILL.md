@@ -255,17 +255,3 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks. The cap is deliberate: a long session can yield many qualifying memories, and three is the most worth adding at once — the gates decide what is eligible, the cap decides how many land per session. Note any you set aside.
 5. Report what was created and why in a brief summary.
 
----
-
-## Tool Reference
-
-| Tool | Purpose |
-|------|---------|
-| `mcp__docs-mcp-server__search_docs` | **Primary:** Semantic search across docs and memories |
-| `mcp__docs-mcp-server__list_libraries` | List indexed libraries |
-| `Glob` | **Fallback:** List all memory files (`.claude/memories/*.md`) |
-| `Read` | Read a specific memory file |
-| `Write` | Create new memory file |
-| `Edit` | Update existing memory file |
-| `Bash` | Resolve git repo name for `Applies to:` (`git remote get-url origin`) |
-| `WebSearch` | Built-in web search for general topics |
