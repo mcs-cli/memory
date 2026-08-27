@@ -84,6 +84,34 @@ Presence is not redundancy — ask which of them would actually fire on the work
 
 ---
 
+## Paired sections (not CI-enforced)
+
+These sections say the same thing from two sides — capture decides whether to *write* a memory, audit decides whether to *keep* one. They are deliberately **not** locked blocks, for two reasons:
+
+- The two skills need different shapes. Capture wants a one-line anti-example; audit wants the category plus its "keep only when…" exception. Forcing them byte-identical would strip the exceptions.
+- Capture cannot point at audit instead. `techpack.yaml` marks `continuous-learning` as `isRequired: true` and `memory-audit` as optional, so capture must stand alone on machines where the audit skill is not installed.
+
+So this is a review checklist, not a guarantee. **Change one side, check the other.**
+
+| Concept | continuous-learning | memory-audit |
+|---|---|---|
+| Naming convention | `## Memory Categories` headings | `C.1 Naming Convention` |
+| Historical record of a shipped change | "Do Not Save" → *Historical record of a one-time shipped change* | DROP category **B** |
+| Naming / style decision once enforced | "Do Not Save" → *Naming/prefix decision once enforced* | DROP category **C** |
+| Self-evident one-time bug fix | "Do Not Save" → *One-time bug fix self-evident in current code* | DROP category **D** |
+| Generic wisdom with a token example | "Do Not Save" → *Generic engineering wisdom with a token project example* | DROP category **E** |
+| Research artifact for dormant work | "Do Not Save" → *Research artifact for deferred or dormant work* | DROP category **F** |
+| One-liner belonging in CLAUDE.md | "Do Not Save" → *One-line rule that belongs in CLAUDE.md* | DROP category **G** |
+| A memory asserting an API that never shipped | Step 4 → *Check 3: Symbol existence* | DROP category **I** |
+| Staleness | `## Staleness Prevention` | `C.5 Staleness Signals` |
+
+**Intentionally unpaired — do not "fix" these:**
+
+- Audit categories **A** (self-marked superseded) and **H** (scope covered by a sibling) have no capture counterpart. A memory cannot be superseded at the moment it is written, and capture handles sibling overlap at Step 2 instead.
+- Audit criterion **C.3** deliberately stopped enumerating template headings. Capture owns `references/templates.md`, and the audit judges structural completeness, so heading names can change on one side without breaking the other.
+
+---
+
 ## Drift verification (CI-ready)
 
 ```sh
