@@ -1,8 +1,11 @@
 # Execution Mechanics
 
 Ordering and technique rules for Step 4, once a batch has been approved. Each one corresponds to a way
-a real audit has corrupted the KB it was cleaning. Add new lessons here rather than to the criteria
-sections of `SKILL.md` — the criteria are the skill's spine and stay short enough to read as criteria.
+a real audit has corrupted the KB it was cleaning.
+
+**This file is read-only at audit time.** Never edit it, or any other file in this skill, while running
+an audit — the audit's only writes are to the memory files the user approved in Step 4. Knowledge worth
+keeping from an audit goes through the `continuous-learning` skill, which routes and gates it.
 
 ## Applying the edits
 
