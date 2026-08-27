@@ -160,6 +160,7 @@ Categories A–H are the recurring concrete shapes of B.1 (forcing-function) fai
 ### B. Pure historical records of shipped one-time changes
 - Folder renames, file renames, identifier migrations, org migrations *that are done*. Once shipped, `git log` answers "why is this named X?" The memory adds nothing actionable.
 - Exception: when the historical change still imposes an ongoing constraint future code must honor — then the memory is about the constraint, not the change.
+- **This category assumes version control holds the history.** In a project with no git, nothing else records the change and the memory may be its only trace — fall back to judging it on B.1 alone.
 
 ### C. Shipped naming or style decisions
 - "We named the prefix X" / "we kept type Y suffixed" / "we use this enum case style." Once enforced by the type system, lint, or formatter, the decision is in the code. Future sessions read the code, not the memory.
@@ -198,7 +199,7 @@ Do not file either as a routine drop: call it out in the verdict table with what
 
 > **Per-batch consent is mandatory.** Each batch is its own approval cycle: produce the verdict table, **stop**, wait for the user, apply their decisions, summarize, then — only after that — move on to the next batch. Never chain batches without an explicit go-ahead between them. See Step 3 for the hard-stop rules.
 
-> **Stay at project root.** Do not `cd` into `.claude/memories/` (or any subdirectory) at any point during the audit. Codebase fact-checks (Grep/Glob/Bash) need cwd at the project root — running them from inside `.claude/memories/` resolves patterns against memory files instead of project source, silently passing fact-checks that should fail. Reference memory files by full path (e.g. `.claude/memories/<file>.md`).
+> **Stay at project root.** Do not `cd` into `.claude/memories/` (or any subdirectory), and do not point git at it with `-C`, at any stage of the audit. Two separate things break. Codebase fact-checks (Grep/Glob/Bash) need cwd at the project root — run from inside `.claude/memories/` they resolve patterns against memory files instead of project source, silently passing fact-checks that should fail. And where the KB is a checkout of a *separate* repo, that directory is a different git root: the C.4 triage would answer about the memories repo's history instead of the project's, reporting whatever that unrelated history happens to contain with full confidence. Reference memory files by full path (e.g. `.claude/memories/<file>.md`).
 
 > **Scope.** Default scope is every memory in `<project>/.claude/memories/`. The user may scope narrower: by category (`learning_*` only), by age (older than N months), or by `Applies to:` (only memories tagging this repo). Honor the requested scope; report the count covered vs. total.
 
