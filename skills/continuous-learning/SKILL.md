@@ -82,7 +82,7 @@ After completing any task, evaluate in two stages.
 - Did this require non-obvious investigation or debugging?
 - Was a choice made about architecture, patterns, or approach?
 - Is there an established project convention worth documenting?
-- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the code, `git log`, lint, or the formatter already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
+- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the current code or a mechanical check already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
 
 If the forcing-function gate fails, or no other prompt answers yes → skip. Otherwise continue to Stage B.
 
@@ -209,7 +209,7 @@ Anti-examples, generalized — do not create memories like these:
 | Public API reference | "Public Git hosting API rate limit is N/hr authenticated" | **[Rule 1]** Public API docs cover this — no project-specific twist. |
 | Personal identifier | Problem section narrates a specific engineer hitting a cache bug | **[Rule 2]** Names an engineer. |
 | Personal preference without project evidence | "Prefer early returns" with no lint rule, consistent codebase usage, or team agreement | **[Rule 3]** Taste, not pattern. |
-| Historical record of a one-time shipped change | "We renamed folder `Install/` to `Sync/` after the command rename" | **[Forcing-function]** Once shipped, `git log` answers this. Future sessions read the current code, not the migration story. The memory drives no future behavior. |
+| Historical record of a one-time shipped change | "We renamed folder `Install/` to `Sync/` after the command rename" | **[Forcing-function]** Once shipped, `git log` answers this. Future sessions read the current code, not the migration story. Assumes version control holds the history — without it nothing else records the change. |
 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance" with one PR cited | **[Rule 1]** Strip the example — what is left is universal advice that fits any project. Belongs in a coding-style doc, not a per-project KB. |
 | One-line rule that belongs in CLAUDE.md | A single-sentence convention with no Context / Options / Consequences | **[Scope]** If it fits in one bullet under "Conventions" in CLAUDE.md, put it there. A standalone memory file is overhead for content that cannot grow. |
 | Naming/prefix decision once enforced | "We kept the `External` prefix on adapter types" | **[Forcing-function]** Once the type system, lint, or formatter enforces it, the decision lives in the code. Future sessions read the code, not the memory. |

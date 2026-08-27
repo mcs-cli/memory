@@ -81,7 +81,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 ### Group B — The audit's own gate
 
 #### B.1 Actionability — the forcing-function test
-- **Primary test:** *"Would a future session act differently in this codebase because this memory exists?"* If the answer is "no, the code itself or `git log` already conveys it" → DROP.
+- **Primary test:** *"Would a future session act differently in this codebase because this memory exists?"* If the answer is "no, the current code already conveys it" → DROP.
 - Can a future session **act on** this memory to avoid a mistake or follow a convention? Or is it purely descriptive/documentary with no clear "do this, not that" takeaway?
 - **Fact-check ≠ actionability.** A claim being *true* and *project-specific* is not enough. Many memories pass A.1 (real anchors) and C.4 (claims still verifiable) but still fail this one — historical records, shipped naming decisions, one-time bug fixes whose fix is self-evident in the code. Apply both passes; do not conflate them.
 - **Bias check.** If you find yourself defending KEEP with "it's project-specific and still accurate" without identifying the *behavior change* it drives, that's the leniency trap. KEEP requires a positive answer to the forcing-function test, not just absence of a reason to drop.
@@ -110,6 +110,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Use `Glob` to verify that referenced files or modules still exist.
 - If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
+- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, or the grep may have matched only the memory's own text. Where you cannot confirm a symbol in current source, report it as unverifiable rather than recommending DROP.
 
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
@@ -123,14 +124,14 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 
 ## DROP Categories — recurring patterns that should not need user pushback
 
-The categories below are the recurring concrete shapes of B.1 (forcing-function) failure. When a memory matches one, the analysis is already done — call DROP without hedging. None of these are "in doubt" cases.
+The categories below are the recurring concrete shapes of B.1 (forcing-function) failure. When a memory matches one, the analysis is already done — call DROP without hedging beyond a category's own "Exception" or "Keep only when" clause, which you should apply.
 
 ### A. Self-marked superseded / deferred / abandoned
 - The memory itself says **SUPERSEDED**, **deferred indefinitely**, **closed without implementation**, **path abandoned**, or points at another memory as the current decision.
 - The "historical context" argument is rarely worth a file. If the superseder cross-links back, that's enough provenance. DROP the older one.
 
 ### B. Pure historical records of shipped one-time changes
-- Folder renames, file renames, identifier migrations, org migrations *that are done*. Once shipped, `git log` answers "why is this named X?" The memory adds nothing actionable.
+- Folder renames, file renames, identifier migrations, org migrations *that are done*. Once shipped, `git log` answers "why is this named X?" The memory adds nothing actionable. This assumes version control holds the history — without it nothing else records the change, so judge on behavior alone.
 - Exception: when the historical change still imposes an ongoing constraint future code must honor — then the memory is about the constraint, not the change.
 
 ### C. Shipped naming or style decisions
@@ -231,6 +232,7 @@ Run only after Step 3 has produced an explicit approval (or per-item decisions) 
 - **UPDATE (content)**: Use `Edit` or `Write` to update the file
 - **UPDATE (merge)**: Create the merged file, then delete the originals
 - **UPDATE (uncertain)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
+- **Stop at the filesystem.** Never `git add`, commit, or push memory changes — a KB may be tracked in the project's own repo, kept in a separate repo with its own propagation rules, or gitignored and purely local.
 
 Report what was done after each batch.
 
@@ -259,7 +261,7 @@ Knowledge base reduced from 42 → 34 files.
 - **Never delete or edit without explicit per-batch approval.** Print the verdict table, then stop. Do not run any tool until the user replies for *this* batch — silence is not consent, and approval of an earlier batch does not carry forward.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
 - **Apply criteria with teeth, not deference.** Past audits drifted into KEEP-by-default because each memory had *some* tie to the project. The forcing-function test (B.1) is the correction: KEEP requires identifying behavior the memory drives, not just absence of error. When the DROP categories above match, call DROP — don't soften it to UPDATE or stash in KEEP "to be safe."
-- **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job.
+- **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job. This is about doubt over a memory's *value*. Doubt over a *fact you could not check* is different — an unverified claim is a reason to ask, not to delete.
 - **Watch for the "but it's true and project-specific" trap.** That sentence is A.1 and C.4 passing — it says nothing about B.1. Two-pass thinking: first verify, then ask "does this change behavior?"
 - **Batch size matters.** 10-15 per batch keeps the review manageable.
 - **End-of-audit check for broken cross-links.** After DROPs land, grep `Related:` / `References:` lines for any pointer to a deleted filename and clean those up — broken refs accumulate silently otherwise.
