@@ -43,55 +43,88 @@ components:
     description: Lightweight JSON processor
     brew: jq
 
+  # ── Embedding provider ──────────────────────────────────────────────────
+  # What the pack actually needs is one capability: an OpenAI-compatible
+  # /v1/embeddings endpoint serving nomic-embed-text. It does not need Ollama.
+  # So every check below probes the endpoint rather than the runtime, and Ollama
+  # is only the fallback installed when nothing already answers. That is what
+  # keeps a machine running llama.cpp / LM Studio / vLLM on this port from
+  # getting Ollama installed on top of it — and from `open Ollama.app` starting
+  # a second server that fights the first for the port.
+  #
+  # These gates work because `ComponentExecutor.isAlreadyInstalled` skips a
+  # `shell:` install when ANY of the component's doctorChecks passes.
   - id: ollama
-    displayName: Ollama
-    description: Local LLM runtime (compatible with all Apple Silicon)
+    # displayName, not id, is what mcs prints in "<name> already installed,
+    # skipping" and in the component picker — so it has to be provider-neutral
+    # too, or a llama.cpp user is told about an Ollama they never installed. The
+    # id stays: nothing shows it, and four dependency lists reference it.
+    displayName: Embedding runtime
+    description: Local embedding runtime — installed only when nothing already serves the endpoint
     type: configuration
     shell: "curl -fsSL https://ollama.com/install.sh | sh"
     shellInteractive: true
     doctorChecks:
-      - type: commandExists
-        name: "Ollama installed"
+      # A script, not two commandExists checks, because "endpoint responding OR
+      # ollama installed" has to collapse into ONE doctor line: `isOptional` is
+      # silently ignored by commandExists, so a second check would show a hard
+      # red on a machine that deliberately runs something else.
+      - type: shellScript
+        name: "Embedding runtime available"
         section: AI Models
-        command: ollama
-        args: ["--version"]
+        command: checks/embedding-runtime.sh
 
   - id: ollama-service
-    displayName: Ollama service
-    description: Ensure Ollama is running
+    displayName: Embedding endpoint
+    description: Ensure something is serving the embedding endpoint
     type: configuration
     dependencies: [ollama]
-    shell: "open /Applications/Ollama.app --args hidden"
+    # `open` covers the Ollama.app install; `brew services` covers a brew one,
+    # which has no .app at all — the old single-arm command could never start a
+    # brew-installed Ollama. The same string is reused as the fixCommand below,
+    # so both arms must stay fast: fixCommands are killed at 10s, which is also
+    # why `brew install` must never appear here.
+    shell: "open /Applications/Ollama.app --args hidden 2>/dev/null || brew services start ollama"
     doctorChecks:
+      # /v1/models, not /api/tags: the former is OpenAI-compatible and answered
+      # by any provider, the latter is Ollama-proprietary and 404s on the rest.
+      # Keep this URL in step with checks/embedding-runtime.sh and
+      # hooks/sync-memories.sh, which probe the same endpoint.
       - type: commandExists
-        name: "Ollama service running"
+        name: "Embedding endpoint responding"
         section: AI Models
         command: curl
-        args: ["-sf", "http://localhost:11434/api/tags"]
-        fixCommand: "open /Applications/Ollama.app --args hidden"
+        args: ["-sf", "--max-time", "3", "http://localhost:11434/v1/models"]
+        fixCommand: "open /Applications/Ollama.app --args hidden 2>/dev/null || brew services start ollama"
 
   - id: ollama-nomic-embed
-    displayName: nomic-embed-text model
+    displayName: Embedding model (nomic-embed-text)
     description: Embedding model for docs-mcp-server
     type: configuration
     dependencies: [ollama-service]
-    shell: "ollama pull nomic-embed-text"
+    # Only Ollama can be pulled into. A provider that is up but cannot embed
+    # fails the check below, which is the right diagnosis — but without this
+    # guard the pull would then run on a machine that has no `ollama` at all.
+    # llama.cpp has no download-only command, so there is nothing to call there.
+    shell: >
+      command -v ollama >/dev/null 2>&1 && ollama pull nomic-embed-text
+      || echo "No Ollama here — your endpoint must serve an embedding model itself."
     doctorChecks:
-      - type: commandExists
-        name: "nomic-embed-text model"
-        section: AI Models
-        command: curl
-        args: ["-sf", "http://localhost:11434/api/show", "-d", "{\"name\":\"nomic-embed-text\"}"]
-      # Probes the exact endpoint docs-mcp-server calls. /api/show only reads the
-      # manifest — it does not load the model. This check forces a full load+embed
-      # round-trip, so a runner crash (e.g. Ollama/ggml incompatibility) surfaces
-      # as HTTP 500 and fails the check.
+      # Probes the exact endpoint docs-mcp-server calls, and is provider-neutral.
+      # A manifest read (Ollama's /api/show) would not load the model, so a runner
+      # crash (e.g. an Ollama/ggml incompatibility) passes it while every real
+      # embedding request 500s. This forces a full load+embed round-trip.
       - type: commandExists
         name: "nomic-embed-text embedding endpoint"
         section: AI Models
         command: curl
         args:
           - "-sf"
+          # commandExists checks carry no mcs-side timeout, so curl's own is the
+          # only bound. Generous enough for a cold model load, short enough that
+          # a wedged server cannot hang `mcs doctor` indefinitely.
+          - "--max-time"
+          - "20"
           - "-X"
           - "POST"
           - "-H"
@@ -267,6 +300,7 @@ components:
     description: Ignores memory files from version control
     gitignore:
       - ".claude/.memories-last-indexed"
+      - ".claude/.memories-index.log"
       - ".claude/.kb-gate/"
       - ".claude/.kb-gate.log"
 

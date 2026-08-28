@@ -1,0 +1,31 @@
+name: embedding-runtime-test
+
+on:
+  pull_request:
+    paths:
+      - "checks/embedding-runtime.sh"
+      - "tests/embedding-runtime-test.sh"
+      - ".github/workflows/embedding-runtime-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "checks/embedding-runtime.sh"
+      - "tests/embedding-runtime-test.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embedding-runtime-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # `curl` and `ollama` are stubbed through a PATH shim, so this needs no
+      # network and no Ollama on the runner.
+      - name: Run the embedding-runtime check suite
+        run: bash tests/embedding-runtime-test.sh

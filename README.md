@@ -18,9 +18,21 @@ mcs sync --global                 # 3. install globally (~/.claude)
 mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Ollama](https://ollama.com) (local embeddings runtime). `mcs` installs the rest (Node, `gh`, `jq`) automatically.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and an embeddings runtime. `mcs` installs the rest (Node, `gh`, `jq`) automatically. If nothing is already serving embeddings, the pack installs [Ollama](https://ollama.com) and pulls `nomic-embed-text` for you.
 
 Global is the recommended scope — this pack has no per-project config, so installing once makes memory available in every project automatically. To scope it to a single repo instead, run `mcs sync` from inside that repo.
+
+### Already run your own embeddings server?
+
+The pack needs one thing: an OpenAI-compatible `/v1/embeddings` on `localhost:11434` that returns a vector for `nomic-embed-text`. It does not care what serves it. If llama.cpp, LM Studio, or vLLM is already answering there, nothing is installed and nothing is pulled — no Ollama, no second server competing for the port.
+
+Three things to know if you bring your own:
+
+- **Alias the model name.** llama.cpp's router matches the request's `model` field against a section name or alias, so `nomic-embed-text` won't resolve on its own. Add `alias = nomic-embed-text` to that model's section in your preset file.
+- **The endpoint has to actually embed.** `/v1/embeddings` needs a model that supports embeddings and a pooling type other than `none`. A server that's up and answering `/v1/models` still fails the model check if it can only chat — which is the intended diagnosis, not a bug.
+- **Wipe the store when you switch providers.** `docs-mcp-server` pins the embedding model *name* when the store is first created, so swapping the thing behind that name changes your vectors while every check still passes. Run `rm -rf ~/Library/Application\ Support/docs-mcp-server`; the session-start hook re-indexes.
+
+Non-default ports and remote hosts aren't configurable yet — the endpoint is currently fixed at `localhost:11434`.
 
 ---
 
@@ -87,8 +99,10 @@ Memories come in two flavors, both stored as version-controlled, human-readable 
 memory/
 ├── techpack.yaml                        # Manifest — defines all components
 ├── config/settings.json                 # Disables built-in auto-memory
+├── checks/
+│   └── embedding-runtime.sh             # Doctor check: is any embedding runtime available?
 ├── hooks/
-│   ├── sync-memories.sh                 # Ollama health + memory indexing/reindexing
+│   ├── sync-memories.sh                 # Endpoint health + memory indexing/reindexing
 │   ├── continuous-learning-activator.sh # Knowledge extraction reminder
 │   └── kb-gate.sh                       # Keeps KB lookups ahead of delegated discovery
 ├── skills/

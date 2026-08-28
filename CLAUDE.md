@@ -13,6 +13,7 @@ The consequence that matters most: **nothing here executes from the repo.** Edit
 | Task | Command |
 |---|---|
 | Run the hook test suite | `bash tests/kb-gate-test.sh` |
+| Run the embedding-check suite | `bash tests/embedding-runtime-test.sh` |
 | Verify the SYNC blocks agree | the snippet below (full version at the bottom of `SYNC-BLOCKS.md`) |
 | Check the manifest parses | `python3 -c "import yaml;yaml.safe_load(open('techpack.yaml'))"` |
 | Install a change locally | `mcs sync --global`, or `mcs sync` inside a project |
@@ -45,6 +46,13 @@ Two harness details are load-bearing rather than incidental:
 **One dispatcher, four hook events.** `hooks/kb-gate.sh` is registered four times in `techpack.yaml` (UserPromptSubmit, PostToolUse, PreToolUse, SubagentStart) and branches on `hook_event_name`. Matchers are broad on purpose; which agent types count as "discovery" is decided in exactly one place, `GATED_AGENTS`. `hooks/sync-memories.sh` is likewise registered twice, on SessionStart and UserPromptSubmit.
 
 **That dispatcher deliberately omits `set -e` and `set -u`**, unlike `sync-memories.sh` which uses `set -uo pipefail`. Its file header explains why and lists rules that are load-bearing: fail open, never `exit 2`, never call `docs-mcp-server` (too slow for `PreToolUse`), log every evaluation. Read that header before editing it.
+
+**The Ollama components gate on the endpoint, not on Ollama.** All three (`ollama`, `ollama-service`, `ollama-nomic-embed`) probe an OpenAI-compatible endpoint on `localhost:11434` — `/v1/models` for reachability, `/v1/embeddings` for the model — so a machine already served by llama.cpp or LM Studio installs nothing. Never reintroduce an `/api/*` check: those are Ollama-proprietary and 404 elsewhere, which is what used to install Ollama.app over a working provider. Read the header of `checks/embedding-runtime.sh` before editing any of it. Four things that are not visible from the checks themselves:
+
+- **It relies on `isAlreadyInstalled` being ANY-pass** across a component's `doctorChecks`. Load-bearing, and mcs has tightened that logic before for causing silent skips — if the installer starts firing on healthy machines, look there first.
+- **`displayName` is provider-neutral on purpose**, because mcs prints it in `"<name> already installed, skipping"` and in the component picker. The `id`s stay Ollama-shaped: nothing displays them, and four dependency lists reference them.
+- **The endpoint URL is duplicated** across `techpack.yaml`, `checks/embedding-runtime.sh` and `hooks/sync-memories.sh`, with "keep in step" comments in each. Making it configurable needs an mcs change first — prompt values reach neither doctor-check args nor `shell:` commands.
+- **`mcs pack validate` warns that `checks/embedding-runtime.sh` is unreferenced. That is expected.** Doctor-check script paths are absent from `ExternalPackManifest.referencedPaths`. Do **not** silence it by adding `checks/` to `ignore:` — mcs accepts that entry silently, and it would suppress update notifications for a file carrying behaviour. The fix belongs in mcs.
 
 **Project-root and library derivation must match across two hooks.** `sync-memories.sh` and `resolve_paths()` in `kb-gate.sh` both resolve git toplevel → `CLAUDE_PROJECT_DIR` → `$PWD`, and derive the library name as the root directory's basename. kb-gate quotes that name back to Claude, and it has to be the one sync-memories indexed. Both files carry "keep in sync" comments.
 

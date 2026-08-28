@@ -24,8 +24,20 @@ TIMESTAMP_FILE="$project_root/.claude/.memories-last-indexed"
 # Exit early if no memories directory
 [ -d "$MEMORIES_DIR" ] || exit 0
 
-# Exit early if Ollama is not running
-curl -s --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1 || exit 0
+# Exit early unless some OpenAI-compatible server is reachable. Two fixes over
+# the previous `curl -s .../api/tags`:
+#   -f          — without it curl exits 0 on an HTTP 404, so any server that
+#                 merely accepted the connection passed the gate.
+#   /v1/models  — /api/tags is Ollama-proprietary and 404s on every other
+#                 provider. This one is answered by all of them.
+# Deliberately the cheap probe, not an embed round-trip: this runs on EVERY
+# prompt (registered on UserPromptSubmit as well as SessionStart), and almost
+# every one of those exits at the staleness check just below. An embed request
+# here would mean a discarded forward pass per prompt, plus a reset keep_alive
+# timer pinning the model in memory. Whether the endpoint can actually embed is
+# proven by the indexer itself failing below — which no longer hides.
+# Keep this URL in step with the probes in techpack.yaml.
+curl -sf --max-time 3 http://localhost:11434/v1/models >/dev/null 2>&1 || exit 0
 
 # --- Staleness check ---
 # If timestamp file exists and nothing changed, nothing to do.
@@ -52,14 +64,21 @@ export DOCS_MCP_EMBEDDING_MODEL="openai:nomic-embed-text"
 existing_url=$(docs-mcp-server list 2>/dev/null \
     | jq -r --arg name "$repo_name" '.[] | select(.name == $name) | .versions[0].sourceUrl // empty')
 
+# Advance the timestamp only on success, and keep the output of a failure around.
+#
+# Touching unconditionally made a failure self-concealing: the staleness check
+# above would see a fresh timestamp and skip every later run, so one failed index
+# meant the KB was silently never indexed again. Gating the touch fixes that, but
+# on its own it trades silence for a full re-attempt every prompt with still no
+# way to see why — hence the log. It is removed on success, so its presence is
+# itself the signal that indexing is broken, and it holds the reason.
+ERROR_LOG="$project_root/.claude/.memories-index.log"
+
 if [ "$existing_url" = "file://$MEMORIES_DIR" ]; then
     docs-mcp-server refresh "$repo_name" \
-        --silent >/dev/null 2>&1
+        --silent >"$ERROR_LOG" 2>&1
 else
     docs-mcp-server scrape "$repo_name" \
         "file://$MEMORIES_DIR" \
-        --silent >/dev/null 2>&1
-fi
-
-# Mark indexing time for subsequent staleness checks
-touch "$TIMESTAMP_FILE"
+        --silent >"$ERROR_LOG" 2>&1
+fi && { touch "$TIMESTAMP_FILE"; rm -f "$ERROR_LOG"; }
