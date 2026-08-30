@@ -4,7 +4,7 @@ cat << 'EOF'
 MANDATORY MEMORY PROTOCOL
 
 If this starts a new sub-task or phase (tests, refactor, deploy, etc.)
-→ search the KB via search_docs for relevant patterns first.
+→ search the KB via mcp__memory-loop__query for relevant patterns first.
 
 If you hit an unexpected error or are about to debug/diagnose
 → search the KB FIRST, before reasoning from scratch.

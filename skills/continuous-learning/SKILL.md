@@ -6,7 +6,7 @@ description: >
   .claude/memories/ for codebase knowledge, CLAUDE.local.md for environment/tool/instance
   config, or skip for public documentation. Also use when the user asks to "run a
   retrospective", "extract learnings", or "save what we learned" from the current session.
-allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__docs-mcp-server__search_docs, mcp__docs-mcp-server__list_libraries
+allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__memory-loop__query, mcp__memory-loop__get
 ---
 
 # Continuous Learning Skill
@@ -96,13 +96,15 @@ If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, re
 
 ### Step 2: Search Existing Knowledge
 
-**Always search docs-mcp-server first** (semantic search across documentation and project memories):
+**Always search the memory index first** (semantic search across this project's memories):
 
 ```
-mcp__docs-mcp-server__search_docs(library: "<project>", query: "<topic>")
+mcp__memory-loop__query(searches: [{type: "lex", query: "<terms>"},
+                                   {type: "vec", query: "<topic>"}],
+                        intent: "<what you are looking for>", rerank: false)
 ```
 
-**Fall back to file listing** if search_docs returns no results or the project library is not yet indexed:
+**Fall back to file listing** if the search returns no results or the index is not yet built:
 
 ```
 Glob(pattern: ".claude/memories/*.md")
@@ -142,7 +144,7 @@ Read [references/templates.md](references/templates.md) for template structures.
 Fill in `Applies to:` directly under the title heading of every memory.
 
 <!-- SYNC:applies-to -->
-**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the `library:` parameter used for `search_docs`, which is folder-based and set automatically by the indexing hook.
+**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the set of memories the search index actually covers, which is folder-based and set automatically by the indexing hook.
 
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->

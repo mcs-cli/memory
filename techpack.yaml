@@ -43,96 +43,136 @@ components:
     description: Lightweight JSON processor
     brew: jq
 
-  - id: ollama
-    displayName: Ollama
-    description: Local LLM runtime (compatible with all Apple Silicon)
-    type: configuration
-    shell: "curl -fsSL https://ollama.com/install.sh | sh"
-    shellInteractive: true
-    doctorChecks:
-      - type: commandExists
-        name: "Ollama installed"
-        section: AI Models
-        command: ollama
-        args: ["--version"]
-
-  - id: ollama-service
-    displayName: Ollama service
-    description: Ensure Ollama is running
-    type: configuration
-    dependencies: [ollama]
-    shell: "open /Applications/Ollama.app --args hidden"
-    doctorChecks:
-      - type: commandExists
-        name: "Ollama service running"
-        section: AI Models
-        command: curl
-        args: ["-sf", "http://localhost:11434/api/tags"]
-        fixCommand: "open /Applications/Ollama.app --args hidden"
-
-  - id: ollama-nomic-embed
-    displayName: nomic-embed-text model
-    description: Embedding model for docs-mcp-server
-    type: configuration
-    dependencies: [ollama-service]
-    shell: "ollama pull nomic-embed-text"
-    doctorChecks:
-      - type: commandExists
-        name: "nomic-embed-text model"
-        section: AI Models
-        command: curl
-        args: ["-sf", "http://localhost:11434/api/show", "-d", "{\"name\":\"nomic-embed-text\"}"]
-      # Probes the exact endpoint docs-mcp-server calls. /api/show only reads the
-      # manifest — it does not load the model. This check forces a full load+embed
-      # round-trip, so a runner crash (e.g. Ollama/ggml incompatibility) surfaces
-      # as HTTP 500 and fails the check.
-      - type: commandExists
-        name: "nomic-embed-text embedding endpoint"
-        section: AI Models
-        command: curl
-        args:
-          - "-sf"
-          - "-X"
-          - "POST"
-          - "-H"
-          - "Content-Type: application/json"
-          - "-d"
-          - '{"model":"nomic-embed-text","input":"ping"}'
-          - "http://localhost:11434/v1/embeddings"
-
-  # ── MCP Servers ─────────────────────────────────────────────────────────
-  # Install the binary once (pinned) so Claude launches a prebuilt binary.
-  # `npx @latest` re-downloaded on every cache eviction, blowing Claude's 30s
-  # MCP startup limit → "MCP error -32000: Connection closed".
-  - id: docs-mcp-server-install
-    displayName: docs-mcp-server binary
-    description: Installs the docs-mcp-server MCP binary once so Claude launches a prebuilt binary
+  # ── Retrieval engine ────────────────────────────────────────────────────
+  # Install the binary once (pinned) so Claude launches a prebuilt binary and no
+  # package manager ever runs inside a hook.
+  #
+  # The exact pin is load-bearing beyond reproducibility. This pack disables
+  # reranking and query expansion by pointing those two model slots at the
+  # embedding model: an embedding model has no ranking head, so qmd catches the
+  # failure and falls back to RRF scores. That fallback is behaviour, not a
+  # documented switch, so the version it was verified against is pinned here and
+  # a doctor check exercises it.
+  - id: qmd-install
+    displayName: qmd
+    description: Local search engine over markdown — no daemon, bundled SQLite + sqlite-vec
     dependencies: [node]
     type: configuration
-    shell: "npm install -g @arabold/docs-mcp-server@2.4.3"
+    shell: "npm install -g @tobilu/qmd@2.8.3"
     doctorChecks:
-      # `list` loads the better-sqlite3 native addon (a broken/ABI-mismatched
-      # build fails here); `--version` wouldn't — it never loads it.
+      # `status` opens the store and loads better-sqlite3 + sqlite-vec. `--version`
+      # loads neither, so a broken or ABI-mismatched native build would pass it.
       - type: commandExists
-        name: "docs-mcp-server binary loads"
+        name: "qmd binary loads"
         section: MCP Servers
-        command: docs-mcp-server
-        args: ["list"]
-        fixCommand: "npm install -g @arabold/docs-mcp-server@2.4.3"
+        command: qmd
+        args: ["status"]
+        fixCommand: "npm install -g @tobilu/qmd@2.8.3"
+      - type: commandExists
+        name: "Node.js 22 or newer (qmd requires it)"
+        section: MCP Servers
+        command: node
+        args: ["-e", "process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)"]
+        fixCommand: "brew upgrade node"
 
-  - id: docs-mcp-server
-    description: Semantic search over memories using local Ollama embeddings
+  # One model serves all three of qmd's slots, so this downloads a single file.
+  # It runs at sync time on purpose: a first-run download inside the async
+  # indexing hook would blow its timeout and leave the index silently empty.
+  - id: qmd-model
+    displayName: Embedding model
+    description: Downloads Qwen3-Embedding-0.6B once (~610 MB, shared across all projects)
+    dependencies: [qmd-install]
+    type: configuration
+    shell: |
+      d=$(mktemp -d)
+      m="hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf"
+      QMD_CONFIG_DIR="$d" INDEX_PATH="$d/pull.sqlite" \
+        QMD_EMBED_MODEL="$m" QMD_GENERATE_MODEL="$m" QMD_RERANK_MODEL="$m" \
+        qmd --index pull pull --progress
+      s=$?; rm -rf "$d"; exit $s
+    doctorChecks:
+      - type: commandExists
+        name: "Qwen3-Embedding-0.6B downloaded"
+        section: AI Models
+        command: /bin/sh
+        args: ["-c", 'test -f "${XDG_CACHE_HOME:-$HOME/.cache}/qmd/models/hf_Qwen_Qwen3-Embedding-0.6B-Q8_0.gguf"']
+
+  # ── MCP Server ──────────────────────────────────────────────────────────
+  # One static command line serves every project, and env values are literal
+  # strings, so the per-project index path has to be computed when the server is
+  # launched. Claude spawns MCP servers with the project as their working
+  # directory, which is what makes that resolution possible at all.
+  #
+  # `--index` is deliberate, not cosmetic. Reaching an index through a
+  # project-local .qmd/ directory puts it under qmd's trust gate, which skips a
+  # non-default embedding model for non-interactive callers without an error —
+  # retrieval would quietly fall back to a weaker model. A named index is never
+  # gated. It also leaves any .qmd/ the user keeps for their own code untouched.
+  #
+  # keep in sync with hooks/sync-memories.sh — the hook writes the index this
+  # reads, and they have to agree on where it is.
+  - id: memory-loop
+    description: Semantic search over this project's memories, backed by local embeddings
     isRequired: true
-    dependencies: [node, ollama, docs-mcp-server-install]
+    dependencies: [node, qmd-install, qmd-model]
     mcp:
-      command: docs-mcp-server
+      command: /bin/sh
       args:
-        - "--read-only"
-        - "--telemetry=false"
-      env:
-        OPENAI_API_KEY: "ollama"
-        OPENAI_API_BASE: "http://localhost:11434/v1"
-        DOCS_MCP_EMBEDDING_MODEL: "openai:nomic-embed-text"
+        - "-c"
+        - |
+          r=$(git rev-parse --show-toplevel 2>/dev/null)
+          [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
+          d="$r/.claude/.kb-index"
+          PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+          export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
+          exec qmd --index memory-loop mcp
+    # Both checks pass quietly in a project that has not been indexed yet — the
+    # session-start hook builds the index, and a doctor run before that should
+    # not read as broken.
+    #
+    # Each repeats the project-root ladder above verbatim. `commandExists` runs
+    # every check as its own process with no way to share a value, so the
+    # duplication is forced; keeping the three copies textually identical is what
+    # makes a future edit obviously propagatable. Do not abbreviate one of them.
+    doctorChecks:
+      # Tier 2, and the only thing that would catch a silent model downgrade:
+      # a weaker embedding model produces no error, just worse results.
+      - type: commandExists
+        name: "Memory index uses the expected embedding model"
+        section: AI Models
+        command: /bin/sh
+        args:
+          - "-c"
+          - |
+            r=$(git rev-parse --show-toplevel 2>/dev/null)
+            [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
+            d="$r/.claude/.kb-index"
+            [ -f "$d/memory-loop.yml" ] || exit 0
+            export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
+            qmd --index memory-loop status 2>/dev/null | grep -q Qwen3-Embedding-0.6B
+      # Deliberately issues a query with *default* arguments — meaning reranking
+      # on — because that is the path this pack neutralises by pointing the
+      # rerank slot at an embedding model. If an upgrade ever made that fatal
+      # instead of a warning, this is where it surfaces. `commandExists` has no
+      # framework-side timeout, hence the alarm.
+      - type: commandExists
+        name: "Memory search returns results"
+        section: MCP Servers
+        command: /bin/sh
+        args:
+          - "-c"
+          - |
+            r=$(git rev-parse --show-toplevel 2>/dev/null)
+            [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
+            d="$r/.claude/.kb-index"
+            [ -f "$d/memory-loop.sqlite" ] || exit 0
+            export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
+            v=$(qmd --index memory-loop status 2>/dev/null |
+                  sed -n 's/.*Vectors: *\([0-9][0-9]*\).*/\1/p' | head -1)
+            [ "${v:-0}" -gt 0 ] || exit 0
+            perl -e 'alarm 30; exec @ARGV' \
+              qmd --index memory-loop query "vec: past decisions and learnings" \
+              -n 1 --format json 2>/dev/null | grep -q docid
 
   # ── Skills ──────────────────────────────────────────────────────────────
   - id: skill-continuous-learning
@@ -162,8 +202,8 @@ components:
 
   - id: hook-sync-memories
     displayName: Sync memories hook
-    description: Checks Ollama health and syncs docs-mcp-server library on session start
-    dependencies: [ollama, docs-mcp-server, jq]
+    description: Indexes memories into the project's search index on session start
+    dependencies: [qmd-install, jq]
     hookEvent: SessionStart
     hookAsync: true
     hookTimeout: 120
@@ -174,8 +214,8 @@ components:
 
   - id: hook-reindex-memories
     displayName: Reindex memories hook
-    description: Reindexes docs-mcp-server library when memories have changed mid-session
-    dependencies: [ollama, docs-mcp-server, jq]
+    description: Reindexes memories when they have changed mid-session
+    dependencies: [qmd-install, jq]
     hookEvent: UserPromptSubmit
     hookAsync: true
     hookTimeout: 120
@@ -213,7 +253,7 @@ components:
     description: Records each KB search so delegated discovery can be checked against it
     dependencies: [jq]
     hookEvent: PostToolUse
-    hookMatcher: "mcp__docs-mcp-server__search_docs"
+    hookMatcher: "mcp__memory-loop__query"
     hook:
       source: hooks/kb-gate.sh
       destination: kb-gate.sh
@@ -267,6 +307,7 @@ components:
     description: Ignores memory files from version control
     gitignore:
       - ".claude/.memories-last-indexed"
+      - ".claude/.kb-index/"
       - ".claude/.kb-gate/"
       - ".claude/.kb-gate.log"
 
@@ -284,6 +325,4 @@ ignore:
 # ---------------------------------------------------------------------------
 templates:
   - sectionIdentifier: continuous-learning
-    placeholders:
-      - __PROJECT_DIR_NAME__
     contentFile: templates/continuous-learning.md

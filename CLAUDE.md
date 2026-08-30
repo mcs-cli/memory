@@ -14,7 +14,8 @@ The consequence that matters most: **nothing here executes from the repo.** Edit
 |---|---|
 | Run the hook test suite | `bash tests/kb-gate-test.sh` |
 | Verify the SYNC blocks agree | the snippet below (full version at the bottom of `SYNC-BLOCKS.md`) |
-| Check the manifest parses | `python3 -c "import yaml;yaml.safe_load(open('techpack.yaml'))"` |
+| Check the manifest parses | `/usr/bin/python3 -c "import yaml;yaml.safe_load(open('techpack.yaml'))"` — the system Python; Homebrew's has no PyYAML |
+| Measure retrieval quality | `bash tests/retrieval-bench.sh` (untracked; needs a built index) |
 | Install a change locally | `mcs sync --global`, or `mcs sync` inside a project |
 | Check installed health | `mcs doctor` |
 
@@ -44,16 +45,22 @@ Two harness details are load-bearing rather than incidental:
 
 **One dispatcher, four hook events.** `hooks/kb-gate.sh` is registered four times in `techpack.yaml` (UserPromptSubmit, PostToolUse, PreToolUse, SubagentStart) and branches on `hook_event_name`. Matchers are broad on purpose; which agent types count as "discovery" is decided in exactly one place, `GATED_AGENTS`. `hooks/sync-memories.sh` is likewise registered twice, on SessionStart and UserPromptSubmit.
 
-**That dispatcher deliberately omits `set -e` and `set -u`**, unlike `sync-memories.sh` which uses `set -uo pipefail`. Its file header explains why and lists rules that are load-bearing: fail open, never `exit 2`, never call `docs-mcp-server` (too slow for `PreToolUse`), log every evaluation. Read that header before editing it.
+**That dispatcher deliberately omits `set -e` and `set -u`**, unlike `sync-memories.sh` which uses `set -uo pipefail`. Its file header explains why and lists rules that are load-bearing: fail open, never `exit 2`, never call `qmd` (it loads an embedding model; far too slow for `PreToolUse`), log every evaluation. Read that header before editing it.
 
-**Project-root and library derivation must match across two hooks.** `sync-memories.sh` and `resolve_paths()` in `kb-gate.sh` both resolve git toplevel → `CLAUDE_PROJECT_DIR` → `$PWD`, and derive the library name as the root directory's basename. kb-gate quotes that name back to Claude, and it has to be the one sync-memories indexed. Both files carry "keep in sync" comments.
+**Project-root derivation must match across two hooks and the manifest.** `sync-memories.sh`, `resolve_paths()` in `kb-gate.sh`, and the `memory-loop` MCP launcher in `techpack.yaml` all resolve git toplevel → `CLAUDE_PROJECT_DIR` → `$PWD`. The first two must agree on which project they are looking at; the launcher must additionally agree with `sync-memories.sh` on `.claude/.kb-index/`, because one writes the index the other opens. All three carry "keep in sync" comments. Non-git projects and launches from a subdirectory both go through the same ladder — do not "simplify" it to `$PWD`.
+
+**The index is reached by `--index`, never by a project-local `.qmd/`.** Two reasons, and the second is the dangerous one. A user may keep their own `.qmd/` at the project root for their own code, which this pack must not touch. And a project-local `.qmd/index.yml` falls under qmd's trust gate, which covers a non-default `models.embed` — for a non-interactive caller the gate does not prompt or fail, it *skips*, silently substituting a much weaker default model. Named indexes are never gated. `QMD_CONFIG_DIR` and `INDEX_PATH` are what move a named index back under the project directory.
+
+**Reranking and query expansion are disabled by pointing their model slots at the embedding model.** The MCP `query` tool hard-defaults `rerank: true` with no server-side way to turn it off, and a *missing* model is downloaded mid-query with no progress output. An embedding model has no ranking head, so qmd fails to build a ranking context, warns, and falls back to RRF — measured at MRR 0.792 against 0.800 for an explicit `rerank: false`, and it buys back zero R@5 versus a real reranker. This depends on qmd's graceful-degradation path rather than a documented switch, which is why `@tobilu/qmd` is pinned to an exact version and why one doctor check issues a *default-argument* query: that check is what would catch the behaviour changing under an upgrade.
+
+**The search call shape is stated in four places, deliberately.** "Typed `lex`+`vec` lines, `rerank: false`" appears in the index's `global_context` (written by `hooks/sync-memories.sh`, and the only text qmd injects into the model's system prompt), `templates/continuous-learning.md` (the only thing that reaches a user's `CLAUDE.md`), `skills/continuous-learning/SKILL.md`, and the `SubagentStart` briefing in `hooks/kb-gate.sh`. No single mechanism reaches all four consumers, so this is four copies rather than one source — change one and check the other three. It matters because the unguided path is measurably worse, not just slower.
 
 **Three text blocks must stay byte-identical across three files.** `capture-rules`, `strip-the-anchors`, and `applies-to` appear in both `SKILL.md`s and in `SYNC-BLOCKS.md`, enforced by `.github/workflows/sync-blocks.yml`. Two rules when touching them:
 
 - Blocks are verdict-neutral. Each skill adds its own verb *outside* the fence — capture says "skip", audit says "DROP". Never move an action verb inside the locked block.
 - Never write a real tag name in prose. The drift check's `awk` range grabs the first matching opener, so a literal mention would shadow the canonical block and make it invisible to the verifier. `SYNC-BLOCKS.md` uses a placeholder form for exactly this reason.
 
-**Templates are installed as marked sections inside someone's `CLAUDE.md`, not as files.** The `templates:` block in `techpack.yaml` maps `templates/continuous-learning.md` to a section fenced by `<!-- mcs:begin memory.continuous-learning -->`. On a global sync it lands in `~/.claude/CLAUDE.md`; on a project sync, in that project's `CLAUDE.local.md`. Edit the template here and re-sync, because editing inside the markers drifts and is overwritten. `__PROJECT_DIR_NAME__` is substituted at install time, like the hook's mode.
+**Templates are installed as marked sections inside someone's `CLAUDE.md`, not as files.** The `templates:` block in `techpack.yaml` maps `templates/continuous-learning.md` to a section fenced by `<!-- mcs:begin memory.continuous-learning -->`. On a global sync it lands in `~/.claude/CLAUDE.md`; on a project sync, in that project's `CLAUDE.local.md`. Edit the template here and re-sync, because editing inside the markers drifts and is overwritten. The template has no placeholders of its own; only `hooks/kb-gate.sh` carries one, `KB_GATE_MODE`.
 
 **Installed artifacts are content-hash verified.** `mcs doctor` compares hashes of installed files, so hand-editing an installed copy registers as drift and the next `mcs sync` restores the packaged version. This is why a skill can never write to its own files: anything saved that way is destroyed on the next sync.
 

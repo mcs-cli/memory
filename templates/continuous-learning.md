@@ -2,7 +2,13 @@
 
 Before writing code, planning, or exploring — **always search the knowledge base first**:
 
-1. **Search the KB** — use the `docs-mcp-server` tools (`search_docs`) and set the `library` parameter to the name of the current project folder. The library name always matches the root directory name of this project. This server indexes `.claude/memories/` — it contains past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Try multiple keyword variations if needed.
+1. **Search the KB** — use `mcp__memory-loop__query`. It searches this project's own `.claude/memories/` — past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Pair a `lex` line with a `vec` line on the same topic and set `intent`; keyword-only search performs badly on this corpus. Try multiple phrasings if the first returns nothing.
+
+   ```
+   mcp__memory-loop__query(searches: [{type: "lex", query: "<distinctive terms>"},
+                                      {type: "vec", query: "<the question, in prose>"}],
+                           intent: "<what you are trying to find out>", rerank: false)
+   ```
 2. **Read matching memories** — review any relevant results for full context (architecture decisions, gotchas, patterns from past sessions).
 
 Only after completing these steps should you proceed with discovery and implementation.
@@ -21,7 +27,7 @@ Past sessions often contain decisions and patterns that prevent unnecessary iter
 
 ### Delegation barrier
 
-`search_docs` and any sub-agent spawn (the `Agent` / `Task` tool) are **not** independent calls —
+`mcp__memory-loop__query` and any sub-agent spawn (the `Agent` / `Task` tool) are **not** independent calls —
 the KB result is an *input* to the sub-agent's prompt. Never place them in the same message, and
 never spawn a sub-agent before you have read the KB results.
 
