@@ -44,15 +44,9 @@ components:
     brew: jq
 
   # ── Retrieval engine ────────────────────────────────────────────────────
-  # Install the binary once (pinned) so Claude launches a prebuilt binary and no
-  # package manager ever runs inside a hook.
-  #
-  # The exact pin is load-bearing beyond reproducibility. This pack disables
-  # reranking and query expansion by pointing those two model slots at the
-  # embedding model: an embedding model has no ranking head, so qmd catches the
-  # failure and falls back to RRF scores. That fallback is behaviour, not a
-  # documented switch, so the version it was verified against is pinned here and
-  # a doctor check exercises it.
+  # Pinned so no package manager runs inside a hook, and because the rerank and
+  # generate neutralisation relies on undocumented fallback behaviour a version
+  # bump could change. See CLAUDE.md.
   - id: qmd-install
     displayName: qmd
     description: Local search engine over markdown — no daemon, bundled SQLite + sqlite-vec
@@ -60,18 +54,13 @@ components:
     type: configuration
     shell: "npm install -g @tobilu/qmd@2.8.3"
     doctorChecks:
-      # Exactly ONE check here, deliberately. `isAlreadyInstalled` treats the first
-      # *passing* supplementary check as proof the whole component is installed, so
-      # a second, broader check — a Node version probe, say — passes on a machine
-      # that already has some other qmd and skips the pinned install entirely. That
-      # is how a machine ends up running a qmd old enough to ignore QMD_CONFIG_DIR,
-      # silently reading a different index config and reporting the wrong embedding
-      # model. Any check added here must fail whenever the pin is not satisfied.
-      #
-      # Asserts the pin *and* that the binary loads: `status` opens the store and
-      # loads better-sqlite3 + sqlite-vec, which `--version` alone never does. A
-      # qmd that runs at all also proves Node is new enough, so no separate Node
-      # probe is needed. Keep the version literal in step with `shell:` above.
+      # ONE check, deliberately: `isAlreadyInstalled` takes the first *passing*
+      # check as proof the component is installed, so any second check that can
+      # pass while the pin is unsatisfied silently disables the install.
+      # Asserts the version and that the binary loads (`--version` alone never
+      # loads the native modules); a qmd that runs proves Node is new enough.
+      # Anchored, so 2.8.30 and 12.8.3 do not pass. Keep the literal in step
+      # with `shell:` above.
       - type: commandExists
         name: "qmd 2.8.3 installed and loading"
         section: MCP Servers
@@ -80,7 +69,7 @@ components:
           - "-c"
           - |
             PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-            qmd --version 2>/dev/null | grep -q "2\.8\.3" || exit 1
+            qmd --version 2>/dev/null | grep -qE '^qmd 2\.8\.3( |$)' || exit 1
             qmd status >/dev/null 2>&1
         fixCommand: "npm install -g @tobilu/qmd@2.8.3"
 
@@ -107,19 +96,12 @@ components:
         args: ["-c", 'test -f "${XDG_CACHE_HOME:-$HOME/.cache}/qmd/models/hf_Qwen_Qwen3-Embedding-0.6B-Q8_0.gguf"']
 
   # ── MCP Server ──────────────────────────────────────────────────────────
-  # One static command line serves every project, and env values are literal
-  # strings, so the per-project index path has to be computed when the server is
-  # launched. Claude spawns MCP servers with the project as their working
-  # directory, which is what makes that resolution possible at all.
+  # One static command line serves every project, so the index path is computed
+  # at launch — Claude spawns MCP servers with the project as their working
+  # directory. Using `--index` rather than a project-local .qmd/ is an invariant;
+  # see CLAUDE.md.
   #
-  # `--index` is deliberate, not cosmetic. Reaching an index through a
-  # project-local .qmd/ directory puts it under qmd's trust gate, which skips a
-  # non-default embedding model for non-interactive callers without an error —
-  # retrieval would quietly fall back to a weaker model. A named index is never
-  # gated. It also leaves any .qmd/ the user keeps for their own code untouched.
-  #
-  # keep in sync with hooks/sync-memories.sh — the hook writes the index this
-  # reads, and they have to agree on where it is.
+  # keep in sync with hooks/sync-memories.sh — it writes the index this opens.
   - id: memory-loop
     description: Semantic search over this project's memories, backed by local embeddings
     isRequired: true
@@ -135,21 +117,10 @@ components:
           PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
           export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
           exec qmd --index memory-loop mcp
-    # Both checks pass quietly in a project that has not been indexed yet — the
-    # session-start hook builds the index, and a doctor run before that should
-    # not read as broken.
-    #
-    # Each hardens PATH the same way the launcher does. `mcs doctor` reaches these
-    # through Process, which does not inherit a login shell, so a bare `qmd` can be
-    # unresolvable here while working fine in a terminal — and the check would then
-    # report "not found", which is what mcs prints for *any* non-zero exit. The
-    # `command -v` guard keeps that from double-reporting a missing qmd, which the
-    # qmd-install check above already owns.
-    #
-    # Each repeats the project-root ladder above verbatim. `commandExists` runs
-    # every check as its own process with no way to share a value, so the
-    # duplication is forced; keeping the three copies textually identical is what
-    # makes a future edit obviously propagatable. Do not abbreviate one of them.
+    # Both pass quietly when nothing is indexed yet. Each hardens PATH because
+    # `mcs doctor` runs these through Process, which has no login shell, and each
+    # repeats the launcher's project-root ladder verbatim — every check is its own
+    # process, so the duplication is forced. Keep the copies identical.
     doctorChecks:
       # Tier 2, and the only thing that would catch a silent model downgrade:
       # a weaker embedding model produces no error, just worse results.
@@ -168,11 +139,10 @@ components:
             [ -f "$d/memory-loop.yml" ] || exit 0
             export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
             qmd --index memory-loop status 2>/dev/null | grep -q Qwen3-Embedding-0.6B
-      # Deliberately issues a query with *default* arguments — meaning reranking
-      # on — because that is the path this pack neutralises by pointing the
-      # rerank slot at an embedding model. If an upgrade ever made that fatal
-      # instead of a warning, this is where it surfaces. `commandExists` has no
-      # framework-side timeout, hence the alarm.
+      # Queries with *default* arguments — reranking on — because that is the path
+      # this pack neutralises. If an upgrade made that fatal rather than a warning,
+      # this check is where it surfaces. The alarm is the timeout `commandExists`
+      # does not provide.
       - type: commandExists
         name: "Memory search returns results"
         section: MCP Servers

@@ -62,10 +62,15 @@ mkdir -p "$INDEX_DIR" 2>/dev/null || exit 0
 # path is what keeps the two interchangeable: `qmd collection add` would record
 # the symlink's *target*, which goes stale the moment the link is re-pointed or
 # the pack is added to a project that already had a real directory.
+# Single-quoted YAML scalar with internal quotes doubled: a project path may
+# legitimately contain "#" or ": ", either of which silently changes what the
+# parser sees when written bare.
+mem_yaml="'${MEMORIES_DIR//\'/\'\'}'"
+
 cat >"$CONFIG.new" <<EOF || exit 0
 collections:
   memories:
-    path: $MEMORIES_DIR
+    path: $mem_yaml
     pattern: "**/*.md"
 models:
   embed: $EMBED_MODEL
@@ -109,9 +114,11 @@ fi
 # happened to change — leaving the KB silently unsearchable in between.
 if [ "$config_changed" = no ] && [ -f "$TIMESTAMP_FILE" ] && [ -f "$INDEX_PATH" ]; then
     newest=$(find "$MEMORIES_DIR" -name "*.md" -newer "$TIMESTAMP_FILE" -print -quit 2>/dev/null)
-    # Also check if the directory itself was modified (file added/removed)
-    dir_changed=""
-    [ "$MEMORIES_DIR" -nt "$TIMESTAMP_FILE" ] && dir_changed="yes"
+    # Additions and removals move a directory's mtime rather than any file's, and
+    # the collection pattern is recursive — so every directory has to be checked,
+    # not just the root. Deleting a memory inside a subdirectory bumps only that
+    # subdirectory, and the dropped file would otherwise stay searchable forever.
+    dir_changed=$(find "$MEMORIES_DIR" -type d -newer "$TIMESTAMP_FILE" -print -quit 2>/dev/null)
     [ -n "$newest" ] || [ -n "$dir_changed" ] || exit 0
 fi
 

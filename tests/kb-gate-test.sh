@@ -91,19 +91,15 @@ j_search() {
         '{hook_event_name:"PostToolUse",session_id:$s,tool_input:{query:$q}}'
 }
 
-# The search tool accepts three input shapes and only ever sends one of them.
 # A hybrid call carries `searches`, not `query`, so a recorder that reads only
-# `query` records nothing and the barrier denies forever.
+# `query` records nothing and the barrier denies forever. `intent` is deliberately
+# not a third shape: it never searches on its own, so it must not create a record.
 j_search_typed() {
     jq -nc --arg s "$sid" --arg a "${1:-lex terms}" --arg b "${2:-vec phrasing}" \
         '{hook_event_name:"PostToolUse",session_id:$s,
           tool_input:{searches:[{type:"lex",query:$a},{type:"vec",query:$b}]}}'
 }
 
-j_search_intent() {
-    jq -nc --arg s "$sid" --arg i "${1:-intent only}" \
-        '{hook_event_name:"PostToolUse",session_id:$s,tool_input:{intent:$i}}'
-}
 
 # j_spawn [prompt] [agent_type] [agent_id]
 j_spawn() {
@@ -304,7 +300,7 @@ assert_silent "no stray temp files" "$(find "$state" -name '*.tmp' 2>/dev/null)"
 assert_num "retained tail stays well clear of the cap" \
     "$((LOG_KEEP_LINES * 200))" -lt "$((LOG_MAX_BYTES / 2))"
 
-group "every shape the search tool can send is recorded"
+group "both searching shapes are recorded"
 
 # Without this the gate fails silently rather than loudly: nothing is written,
 # no error is raised, and every subsequent spawn is denied for a search that
@@ -318,10 +314,6 @@ assert_contains "a single-string query" "$(queries)" "plain query field"
 new_session
 run "$mode" "$proj" "$(j_search_typed "counter state" "why not wall clock")" >/dev/null
 assert_contains "typed lex+vec searches are joined" "$(queries)" "counter state why not wall clock"
-
-new_session
-run "$mode" "$proj" "$(j_search_intent "narrowing the topic")" >/dev/null
-assert_contains "intent alone still counts as a search" "$(queries)" "narrowing the topic"
 
 new_session
 run "$mode" "$proj" "$(j_search_typed "hybrid" "hybrid")" >/dev/null

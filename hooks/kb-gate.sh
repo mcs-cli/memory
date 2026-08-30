@@ -222,12 +222,13 @@ PostToolUse)
     # `searches`, never both. Reading only `query` would miss every hybrid
     # lex+vec call — the form this pack steers Claude toward — and the barrier
     # would then deny forever with nothing to show why.
-    # Built as a list rather than a `//` chain: `//` only falls through on null,
-    # so an empty join would stop it, and `null | map` raises — either way the
-    # whole extraction yields nothing and the search goes unrecorded.
+    # Only the two shapes that actually search: a bare `query`, or the joined
+    # text of typed `searches`. `intent` is context and never searches on its
+    # own, so accepting it would let a request that retrieved nothing satisfy
+    # the barrier. Built as a list rather than a `//` chain: `//` only falls
+    # through on null, so an empty join would stop it, and `null | map` raises.
     query=$(jq -r '[.tool_input.query,
-                    ((.tool_input.searches // []) | map(.query) | join(" ")),
-                    .tool_input.intent]
+                    ((.tool_input.searches // []) | map(.query) | join(" "))]
                    | map(select(. != null and . != "")) | first // ""' <<<"$payload" 2>/dev/null)
     [ -n "$query" ] || exit 0
     ensure_state || exit 0
