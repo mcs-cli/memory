@@ -144,20 +144,32 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
+# Keep the output of a failed run. Gating the timestamp on success stops a
+# failure from concealing itself, but on its own it trades silence for a
+# re-attempt every prompt with still no way to see why. The log is removed on
+# success, so its presence is itself the signal that indexing is broken, and it
+# holds the reason. A doctor check reports it. It lives beside the index it
+# describes, so resetting the index by removing that directory clears it too.
+ERROR_LOG="$INDEX_DIR/memory-loop.log"
+
 # `update` rescans the collection for added, changed and removed files; `embed`
 # vectorises whatever came back without one. Both are incremental — a no-op pass
 # is under a tenth of a second.
-qmd --index memory-loop update >/dev/null 2>&1 || exit 0
-qmd --index memory-loop embed >/dev/null 2>&1 || exit 0
+qmd --index memory-loop update >"$ERROR_LOG" 2>&1 || exit 0
+qmd --index memory-loop embed >>"$ERROR_LOG" 2>&1 || exit 0
 
 # Confirm the work actually happened rather than trusting an exit code: anything
 # that leaves documents pending must not mark the index fresh, or the staleness
-# check skips them until some other memory changes.
+# check skips them until some other memory changes. This is the case a failing
+# exit code would miss — qmd reports embed-lock contention as success.
 pending=$(qmd --index memory-loop status 2>/dev/null |
             sed -n 's/.*Pending: *\([0-9][0-9]*\).*/\1/p' | head -1)
-[ "${pending:-0}" -eq 0 ] || exit 0
+if [ "${pending:-0}" -ne 0 ]; then
+    printf '%s  %s documents still need embedding after this run.\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" "$pending" >>"$ERROR_LOG"
+    exit 0
+fi
 
-# Mark indexing time for subsequent staleness checks. Gated on the commands above
-# succeeding: an unconditional touch marks a *failed* index as fresh, and the
-# staleness check then skips it forever with nothing reporting the gap.
+# Mark indexing time for subsequent staleness checks, and clear the failure log.
 touch "$TIMESTAMP_FILE"
+rm -f "$ERROR_LOG"

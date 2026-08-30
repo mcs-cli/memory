@@ -135,10 +135,11 @@ components:
           mkdir -p "$d"
           export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
           exec qmd --index memory-loop mcp
-    # Both pass quietly when nothing is indexed yet. Each hardens PATH because
-    # `mcs doctor` runs these through Process, which has no login shell, and each
-    # repeats the launcher's project-root ladder verbatim — every check is its own
-    # process, so the duplication is forced. Keep the copies identical.
+    # All three pass quietly when nothing is indexed yet, and each repeats the
+    # launcher's project-root ladder verbatim — every check is its own process, so
+    # the duplication is forced. Keep the copies identical. The two that invoke qmd
+    # also harden PATH, because `mcs doctor` runs them through Process, which has
+    # no login shell.
     doctorChecks:
       # Tier 2, and the only thing that would catch a silent model downgrade:
       # a weaker embedding model produces no error, just worse results.
@@ -157,6 +158,20 @@ components:
             [ -f "$d/memory-loop.yml" ] || exit 0
             export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
             qmd --index memory-loop status 2>/dev/null | grep -q Qwen3-Embedding-0.6B
+      # The indexing hook removes its log on success, so the file existing at all
+      # means the last run failed or left documents unembedded — and the reason is
+      # inside it. Without this, a broken index is only visible as searches quietly
+      # returning nothing.
+      - type: commandExists
+        name: "Memory indexing completed"
+        section: AI Models
+        command: /bin/sh
+        args:
+          - "-c"
+          - |
+            r=$(git rev-parse --show-toplevel 2>/dev/null)
+            [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
+            [ ! -f "$r/.claude/.kb-index/memory-loop.log" ]
       # Queries with *default* arguments — reranking on — because that is the path
       # this pack neutralises. If an upgrade made that fatal rather than a warning,
       # this check is where it surfaces. The alarm is the timeout `commandExists`
