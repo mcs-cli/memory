@@ -101,7 +101,7 @@ If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, re
 ```
 mcp__memory-loop__query(searches: [{type: "lex", query: "<terms>"},
                                    {type: "vec", query: "<topic>"}],
-                        intent: "<what you are looking for>", rerank: false)
+                        intent: "<what you are looking for>", rerank: false, limit: 5)
 ```
 
 **Fall back to file listing** if the search returns no results or the index is not yet built:

@@ -2,13 +2,20 @@
 
 Before writing code, planning, or exploring — **always search the knowledge base first**:
 
-1. **Search the KB** — use `mcp__memory-loop__query`. It searches this project's own `.claude/memories/` — past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Pair a `lex` line with a `vec` line on the same topic and set `intent`; keyword-only search performs badly on this corpus. Try multiple phrasings if the first returns nothing.
+1. **Search the KB** — use `mcp__memory-loop__query`. It searches this project's own `.claude/memories/` — past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Always pair the two line types — they answer different questions and neither is sufficient alone:
+
+   - `lex` takes **keywords**: distinctive identifiers, error names, `"quoted phrases"`, `-negation`. It is the only thing that finds a rare exact token.
+   - `vec` takes **prose**: the question as you would ask a colleague. It is what finds a memory that describes your symptom in different words.
 
    ```
    mcp__memory-loop__query(searches: [{type: "lex", query: "<distinctive terms>"},
                                       {type: "vec", query: "<the question, in prose>"}],
-                           intent: "<what you are trying to find out>", rerank: false)
+                           intent: "<what you are trying to find out>",
+                           rerank: false, limit: 5)
    ```
+
+   Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. Judge the snippets, and try a different phrasing if nothing fits.
+
 2. **Read matching memories** — review any relevant results for full context (architecture decisions, gotchas, patterns from past sessions).
 
 Only after completing these steps should you proceed with discovery and implementation.

@@ -258,10 +258,11 @@ SubagentStart)
                 "  ground truth. Verify it against the code, but do NOT search the KB and\n" +
                 "  do NOT re-derive it.\n" +
                 "- Otherwise, if you are about to read or grep more than a couple of files,\n" +
-                "  issue ONE mcp__memory-loop__query for the topic of your task first — one\n" +
-                "  search is far cheaper than a blind file sweep. Unlike the main thread, do\n" +
-                "  not try keyword variations: if nothing relevant comes back, move on to\n" +
-                "  the code.\n" +
+                "  issue ONE mcp__memory-loop__query for the topic of your task first — a\n" +
+                "  lex line of distinctive terms plus a vec line phrased as a question,\n" +
+                "  with rerank:false and limit:5. One search is far cheaper than a blind\n" +
+                "  file sweep. Unlike the main thread, do not try keyword variations: if\n" +
+                "  nothing relevant comes back, move on to the code.\n" +
                 "- Report back anything the KB got wrong or left out."
             )
         }

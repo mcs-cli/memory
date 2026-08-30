@@ -73,8 +73,11 @@ models:
   rerank: $EMBED_MODEL
 global_context: |
   Project memory KB: prior learnings, decisions and debugging discoveries. Not
-  external documentation. Search with searches:[{type:"lex"},{type:"vec"}] plus
-  an intent, and rerank:false — a bare query string is slower and scores worse.
+  external documentation. Search with searches:[{type:"lex", query:"distinctive
+  terms"},{type:"vec", query:"the question in prose"}] plus an intent, with
+  rerank:false and limit:5. Ranks past 5 never add a hit here, and a bare query
+  string is slower and scores worse. Scores are 1/rank, not confidence — judge
+  the snippets.
 EOF
 
 # Kept short on purpose: qmd serves global_context two ways — once as the MCP
