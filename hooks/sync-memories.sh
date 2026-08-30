@@ -72,19 +72,17 @@ models:
   generate: $EMBED_MODEL
   rerank: $EMBED_MODEL
 global_context: |
-  This index holds the project's memory KB: learnings, architectural decisions
-  and debugging discoveries recorded in earlier sessions. It is not external
-  documentation.
-
-  Always search it with typed lines and reranking off:
-    searches: [{type: "lex", query: "..."}, {type: "vec", query: "..."}]
-    rerank: false
-  Query expansion and reranking are not installed for this index. A bare query
-  string is auto-expanded and is measurably worse here as well as several
-  seconds slower — two typed lines score MRR 0.80 against 0.75 for one bare
-  string. Pass both lines and an intent.
+  Project memory KB: prior learnings, decisions and debugging discoveries. Not
+  external documentation. Search with searches:[{type:"lex"},{type:"vec"}] plus
+  an intent, and rerank:false — a bare query string is slower and scores worse.
 EOF
 
+# Kept short on purpose: qmd serves global_context two ways — once as the MCP
+# server's `instructions` (the reason it is here at all) and again as the
+# `context` field of *every* search result. At 591 characters it was 53% of a
+# ten-result response. The fuller explanation lives in the CLAUDE.md template,
+# both skills, and the sub-agent briefing, none of which are echoed per result.
+#
 # Replaced only when the content actually differs, so a no-op run leaves the
 # mtime alone. Comparing whole files rather than probing for one line is what
 # lets any later edit here — the context text especially — reach an install that

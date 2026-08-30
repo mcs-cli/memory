@@ -60,20 +60,29 @@ components:
     type: configuration
     shell: "npm install -g @tobilu/qmd@2.8.3"
     doctorChecks:
-      # `status` opens the store and loads better-sqlite3 + sqlite-vec. `--version`
-      # loads neither, so a broken or ABI-mismatched native build would pass it.
+      # Exactly ONE check here, deliberately. `isAlreadyInstalled` treats the first
+      # *passing* supplementary check as proof the whole component is installed, so
+      # a second, broader check — a Node version probe, say — passes on a machine
+      # that already has some other qmd and skips the pinned install entirely. That
+      # is how a machine ends up running a qmd old enough to ignore QMD_CONFIG_DIR,
+      # silently reading a different index config and reporting the wrong embedding
+      # model. Any check added here must fail whenever the pin is not satisfied.
+      #
+      # Asserts the pin *and* that the binary loads: `status` opens the store and
+      # loads better-sqlite3 + sqlite-vec, which `--version` alone never does. A
+      # qmd that runs at all also proves Node is new enough, so no separate Node
+      # probe is needed. Keep the version literal in step with `shell:` above.
       - type: commandExists
-        name: "qmd binary loads"
+        name: "qmd 2.8.3 installed and loading"
         section: MCP Servers
-        command: qmd
-        args: ["status"]
+        command: /bin/sh
+        args:
+          - "-c"
+          - |
+            PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+            qmd --version 2>/dev/null | grep -q "2\.8\.3" || exit 1
+            qmd status >/dev/null 2>&1
         fixCommand: "npm install -g @tobilu/qmd@2.8.3"
-      - type: commandExists
-        name: "Node.js 22 or newer (qmd requires it)"
-        section: MCP Servers
-        command: node
-        args: ["-e", "process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)"]
-        fixCommand: "brew upgrade node"
 
   # One model serves all three of qmd's slots, so this downloads a single file.
   # It runs at sync time on purpose: a first-run download inside the async
@@ -130,6 +139,13 @@ components:
     # session-start hook builds the index, and a doctor run before that should
     # not read as broken.
     #
+    # Each hardens PATH the same way the launcher does. `mcs doctor` reaches these
+    # through Process, which does not inherit a login shell, so a bare `qmd` can be
+    # unresolvable here while working fine in a terminal — and the check would then
+    # report "not found", which is what mcs prints for *any* non-zero exit. The
+    # `command -v` guard keeps that from double-reporting a missing qmd, which the
+    # qmd-install check above already owns.
+    #
     # Each repeats the project-root ladder above verbatim. `commandExists` runs
     # every check as its own process with no way to share a value, so the
     # duplication is forced; keeping the three copies textually identical is what
@@ -147,6 +163,8 @@ components:
             r=$(git rev-parse --show-toplevel 2>/dev/null)
             [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
             d="$r/.claude/.kb-index"
+            PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+            command -v qmd >/dev/null 2>&1 || exit 0
             [ -f "$d/memory-loop.yml" ] || exit 0
             export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
             qmd --index memory-loop status 2>/dev/null | grep -q Qwen3-Embedding-0.6B
@@ -165,6 +183,8 @@ components:
             r=$(git rev-parse --show-toplevel 2>/dev/null)
             [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
             d="$r/.claude/.kb-index"
+            PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+            command -v qmd >/dev/null 2>&1 || exit 0
             [ -f "$d/memory-loop.sqlite" ] || exit 0
             export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
             v=$(qmd --index memory-loop status 2>/dev/null |
