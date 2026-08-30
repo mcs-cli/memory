@@ -61,6 +61,13 @@ components:
       # loads the native modules); a qmd that runs proves Node is new enough.
       # Anchored, so 2.8.30 and 12.8.3 do not pass. Keep the literal in step
       # with `shell:` above.
+      #
+      # The load probe runs against a throwaway index. A bare `qmd status` adopts
+      # whatever config it finds by walking up from the working directory, so in a
+      # project where the user keeps their own .qmd/ it writes model keys into
+      # their config and creates their index.sqlite — the pack must not touch it.
+      # `--index` is what skips that discovery; QMD_CONFIG_DIR alone does not,
+      # because a discovered .qmd/ outranks it.
       - type: commandExists
         name: "qmd 2.8.3 installed and loading"
         section: MCP Servers
@@ -70,7 +77,10 @@ components:
           - |
             PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
             qmd --version 2>/dev/null | grep -qE '^qmd 2\.8\.3( |$)' || exit 1
-            qmd status >/dev/null 2>&1
+            d=$(mktemp -d) || exit 1
+            QMD_CONFIG_DIR="$d" INDEX_PATH="$d/probe.sqlite" \
+              qmd --index probe status >/dev/null 2>&1
+            s=$?; rm -rf "$d"; exit $s
         fixCommand: "npm install -g @tobilu/qmd@2.8.3"
 
   # One model serves all three of qmd's slots, so this downloads a single file.
@@ -101,6 +111,13 @@ components:
   # directory. Using `--index` rather than a project-local .qmd/ is an invariant;
   # see CLAUDE.md.
   #
+  # `mkdir -p` because qmd cannot open an index under a directory that does not
+  # exist, and the server would fail to connect in every project that has not
+  # captured a memory yet — which is every new project. The CLAUDE.md section is
+  # installed globally and tells Claude to search before each task, so the tool
+  # has to exist everywhere that instruction does. An empty index is honest: the
+  # server reports "0 markdown documents" in its own instructions.
+  #
   # keep in sync with hooks/sync-memories.sh — it writes the index this opens.
   - id: memory-loop
     description: Semantic search over this project's memories, backed by local embeddings
@@ -115,6 +132,7 @@ components:
           [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
           d="$r/.claude/.kb-index"
           PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+          mkdir -p "$d"
           export QMD_CONFIG_DIR="$d" INDEX_PATH="$d/memory-loop.sqlite"
           exec qmd --index memory-loop mcp
     # Both pass quietly when nothing is indexed yet. Each hardens PATH because

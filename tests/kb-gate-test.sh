@@ -94,6 +94,10 @@ j_search() {
 # A hybrid call carries `searches`, not `query`, so a recorder that reads only
 # `query` records nothing and the barrier denies forever. `intent` is deliberately
 # not a third shape: it never searches on its own, so it must not create a record.
+j_search_intent() {
+    jq -nc --arg s "$sid" --arg i "${1:-intent only}" \
+        '{hook_event_name:"PostToolUse",session_id:$s,tool_input:{intent:$i}}'
+}
 j_search_typed() {
     jq -nc --arg s "$sid" --arg a "${1:-lex terms}" --arg b "${2:-vec phrasing}" \
         '{hook_event_name:"PostToolUse",session_id:$s,
@@ -318,6 +322,14 @@ assert_contains "typed lex+vec searches are joined" "$(queries)" "counter state 
 new_session
 run "$mode" "$proj" "$(j_search_typed "hybrid" "hybrid")" >/dev/null
 assert_allow "a typed search satisfies the barrier" "$(spawn "$KB — from a typed search")"
+
+# `intent` is context, not a search: qmd rejects a call carrying neither `query`
+# nor `searches`, so treating it as evidence would let a request that retrieved
+# nothing open the barrier.
+new_session
+run "$mode" "$proj" "$(j_search_intent "narrowing the topic")" >/dev/null
+assert_silent "an intent-only call records nothing" "$(queries)"
+assert_deny "and does not satisfy the barrier" "$(spawn "$KB — but no search ran")"
 
 # ==========================================================================
 

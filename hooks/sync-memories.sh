@@ -32,9 +32,6 @@ TIMESTAMP_FILE="$project_root/.claude/.memories-last-indexed"
 # the fallback: MRR 0.792 against 0.800 for an explicit rerank:false.
 EMBED_MODEL="hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf"
 
-# Exit early if no memories directory
-[ -d "$MEMORIES_DIR" ] || exit 0
-
 # Exit early if qmd is not installed
 command -v qmd >/dev/null 2>&1 || exit 0
 
@@ -103,6 +100,14 @@ else
     rm -f "$CONFIG.new"
 fi
 
+# The config is written even when no memory has been captured yet, because the
+# MCP server reads its collection list once at startup: a server that booted
+# against a config with no collections cannot see the first memory until the next
+# session, however promptly this hook indexes it. Registering the collection up
+# front costs nothing — qmd accepts a collection whose directory does not exist
+# and reports zero documents.
+[ -d "$MEMORIES_DIR" ] || exit 0
+
 # --- Staleness check ---
 # Runs after the config sync, not before: a config that changed (a new model, new
 # guidance) has to reach the index even when no memory file moved. Skipping here
@@ -123,13 +128,36 @@ if [ "$config_changed" = no ] && [ -f "$TIMESTAMP_FILE" ] && [ -f "$INDEX_PATH" 
 fi
 
 # --- Reindex ---
+# Both hook registrations are async, so two runs can overlap on a slow first
+# index. qmd's own embed lock reports contention as success — it prints that
+# another embed is running and exits 0 — so without a mutex here the losing run
+# would mark the index fresh having embedded nothing, and the staleness check
+# would then skip the pending work indefinitely.
+#
+# mkdir is the atomic test-and-set. A run killed by the hook timeout cannot
+# release the lock, so a lock older than the timeout is treated as abandoned.
+LOCK="$INDEX_DIR/.reindex.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    [ -n "$(find "$LOCK" -maxdepth 0 -mmin +5 2>/dev/null)" ] || exit 0
+    rmdir "$LOCK" 2>/dev/null
+    mkdir "$LOCK" 2>/dev/null || exit 0
+fi
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+
 # `update` rescans the collection for added, changed and removed files; `embed`
 # vectorises whatever came back without one. Both are incremental — a no-op pass
 # is under a tenth of a second.
 qmd --index memory-loop update >/dev/null 2>&1 || exit 0
 qmd --index memory-loop embed >/dev/null 2>&1 || exit 0
 
-# Mark indexing time for subsequent staleness checks. Gated on the two commands
-# above succeeding: an unconditional touch marks a *failed* index as fresh, and
-# the staleness check then skips it forever with nothing reporting the gap.
+# Confirm the work actually happened rather than trusting an exit code: anything
+# that leaves documents pending must not mark the index fresh, or the staleness
+# check skips them until some other memory changes.
+pending=$(qmd --index memory-loop status 2>/dev/null |
+            sed -n 's/.*Pending: *\([0-9][0-9]*\).*/\1/p' | head -1)
+[ "${pending:-0}" -eq 0 ] || exit 0
+
+# Mark indexing time for subsequent staleness checks. Gated on the commands above
+# succeeding: an unconditional touch marks a *failed* index as fresh, and the
+# staleness check then skips it forever with nothing reporting the gap.
 touch "$TIMESTAMP_FILE"
