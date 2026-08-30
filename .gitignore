@@ -18,6 +18,3 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
-
-# Memory pack: local search index
-.claude/.kb-index/
