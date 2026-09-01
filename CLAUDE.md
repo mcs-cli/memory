@@ -12,7 +12,8 @@ The consequence that matters most: **nothing here executes from the repo.** Edit
 
 | Task | Command |
 |---|---|
-| Run the hook test suite | `bash tests/kb-gate-test.sh` |
+| Run the KB gate suite | `bash tests/kb-gate-test.sh` |
+| Run the indexer suite | `bash tests/sync-memories-test.sh` (stubs qmd; no model needed) |
 | Verify the SYNC blocks agree | the snippet below (full version at the bottom of `SYNC-BLOCKS.md`) |
 | Check the manifest parses | `/usr/bin/python3 -c "import yaml;yaml.safe_load(open('techpack.yaml'))"` — the system Python; Homebrew's has no PyYAML |
 | Install a change locally | `mcs sync --global`, or `mcs sync` inside a project |
@@ -37,6 +38,8 @@ Two harness details are load-bearing rather than incidental:
 
 - It runs from a temp dir **outside any git repo**, because the hook resolves its project root with `git rev-parse --show-toplevel` first. Run from the checkout, the harness would write state into the working tree and read your real session files.
 - The fixture project must contain `.claude/memories/`, or every `PreToolUse` call takes the `no_memories_dir` skip and nothing is gated. The denial count asserted at the end is what turns that into a loud failure instead of a green run that asserted nothing.
+
+`tests/sync-memories-test.sh` shares the outside-a-git-repo rule and stubs `qmd` on `PATH`, so it needs no model. Its own trap: a first run reindexes under any version of the hook, because the config file does not exist yet. The assertions that mean anything are the **second** runs, and they only discriminate because the stub creates `$INDEX_PATH` — a staleness gate guarded on that file falls through without it.
 
 ## Invariants that span files
 
