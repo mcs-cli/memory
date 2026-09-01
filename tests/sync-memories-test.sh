@@ -30,6 +30,7 @@ trap 'rm -rf "$work"' EXIT
 pass=0
 fail=0
 calls=0
+last_exit=0
 
 ok() {
     pass=$((pass + 1))
@@ -67,6 +68,9 @@ case " $* " in
     [ "${STUB_MODE:-ok}" = pending ] &&
         echo "  Pending:  3 need embedding (run 'qmd embed')"
     ;;
+*" cleanup "*)
+    [ "${STUB_MODE:-ok}" = cleanup_fails ] && exit 1
+    ;;
 esac
 exit 0
 STUB
@@ -99,6 +103,7 @@ run() {
             PATH="$stub:$PATH" STUB_LOG="$work/stub.log" STUB_MODE="${2:-ok}" \
             bash "$src"
     )
+    last_exit=$?
     calls=$((calls + $(grep -c . "$work/stub.log")))
 }
 
@@ -110,6 +115,13 @@ assert_contains() { # <label> <haystack> <needle>
     case "$2" in
     *"$3"*) ok "$1" ;;
     *) bad "$1" "expected to contain '$3', got: ${2:-<empty>}" ;;
+    esac
+}
+
+assert_not_contains() { # <label> <haystack> <needle>
+    case "$2" in
+    *"$3"*) bad "$1" "expected NOT to contain '$3', got: $2" ;;
+    *) ok "$1" ;;
     esac
 }
 
@@ -160,15 +172,24 @@ assert_missing "no index directory is populated" "$nomem/.claude/.kb-index/memor
 group "failures leave the reason on disk"
 run "$plain" update_fails
 assert_exists "a failed update keeps the log" "$plain/.claude/.kb-index/memory-loop.log"
+assert_not_contains "and stops before cleanup" "$(stub_log)" "cleanup"
 
 run "$plain" pending
 assert_contains "unembedded documents keep the log" \
     "$(cat "$plain/.claude/.kb-index/memory-loop.log")" "still need embedding"
+assert_not_contains "and stops before cleanup" "$(stub_log)" "cleanup"
 
 group "a clean run leaves nothing behind"
 run "$plain"
 assert_missing "the failure log is cleared" "$plain/.claude/.kb-index/memory-loop.log"
 assert_missing "the lock is released" "$plain/.claude/.kb-index/.reindex.lock"
+assert_contains "orphaned chunks are cleaned up" "$(stub_log)" "cleanup"
+
+# Housekeeping must never turn into an indexing failure.
+run "$plain" cleanup_fails
+assert_missing "a failed cleanup writes no failure log" "$plain/.claude/.kb-index/memory-loop.log"
+[ "$last_exit" -eq 0 ] && ok "a failed cleanup still exits 0" ||
+    bad "a failed cleanup still exits 0" "hook exited $last_exit"
 
 # ==========================================================================
 

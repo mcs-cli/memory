@@ -71,6 +71,8 @@ mkdir -p "$INDEX_DIR" 2>/dev/null || exit 0
 # parser sees when written bare.
 mem_yaml="'${MEMORIES_DIR//\'/\'\'}'"
 
+# Unquoted heredoc — it has to interpolate the two variables below, so backticks
+# and $ in the context text are executed by the shell and vanish from the config.
 cat >"$CONFIG.new" <<EOF || exit 0
 collections:
   memories:
@@ -155,3 +157,10 @@ fi
 
 # Nothing pending: clear the failure log so its presence stays meaningful.
 rm -f "$ERROR_LOG"
+
+# Editing a memory strands its old vectors; one audit left 275 orphaned chunks,
+# 47% of the file. Unconditional for the same reason the staleness check is gone:
+# 0.116s is not worth a condition. Also clears qmd's LLM cache, empty here since
+# nothing populates it while rerank and expansion are off. Best-effort — a failed
+# cleanup is a disk problem, not an indexing one.
+qmd --index memory-loop cleanup >/dev/null 2>&1 || true
