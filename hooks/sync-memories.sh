@@ -2,6 +2,14 @@
 
 # Hook: index .claude/memories/ into this project's search index.
 # Runs on SessionStart and UserPromptSubmit (async). Never fails the hook.
+#
+# Reindexes unconditionally; do not add a staleness check. A `find -newer` gate
+# was removed because `find` does not descend a symlinked root, and
+# .claude/memories is a symlink whenever the shared-memories pack is installed:
+# it saw zero files, so the index froze for days with no failure log. Cost of
+# dropping it, on a 527-document index: update 0.185s, embed 0.105s, status
+# 0.134s, against 0.056s saved. `qmd update` resolves the collection path itself,
+# so a directory and a symlink behave the same.
 
 set -uo pipefail
 
@@ -21,7 +29,6 @@ project_root=$(git rev-parse --show-toplevel 2>/dev/null)
 MEMORIES_DIR="$project_root/.claude/memories"
 INDEX_DIR="$project_root/.claude/.kb-index"
 CONFIG="$INDEX_DIR/memory-loop.yml"
-TIMESTAMP_FILE="$project_root/.claude/.memories-last-indexed"
 
 # One model fills all three of qmd's slots. Embed is the only one that does real
 # work; rerank and generate are pointed here deliberately. An embedding model has
@@ -92,10 +99,8 @@ EOF
 # mtime alone. Comparing whole files rather than probing for one line is what
 # lets any later edit here — the context text especially — reach an install that
 # already has a config.
-config_changed=no
 if ! cmp -s "$CONFIG.new" "$CONFIG" 2>/dev/null; then
     mv -f "$CONFIG.new" "$CONFIG" || exit 0
-    config_changed=yes
 else
     rm -f "$CONFIG.new"
 fi
@@ -108,31 +113,12 @@ fi
 # and reports zero documents.
 [ -d "$MEMORIES_DIR" ] || exit 0
 
-# --- Staleness check ---
-# Runs after the config sync, not before: a config that changed (a new model, new
-# guidance) has to reach the index even when no memory file moved. Skipping here
-# is only safe when nothing at all has changed.
-#
-# The index has to be present for the timestamp to mean anything. It outlived the
-# previous retrieval backend: on an upgrade the file says "indexed recently" while
-# no index exists at all, and without this the hook would skip until some memory
-# happened to change — leaving the KB silently unsearchable in between.
-if [ "$config_changed" = no ] && [ -f "$TIMESTAMP_FILE" ] && [ -f "$INDEX_PATH" ]; then
-    newest=$(find "$MEMORIES_DIR" -name "*.md" -newer "$TIMESTAMP_FILE" -print -quit 2>/dev/null)
-    # Additions and removals move a directory's mtime rather than any file's, and
-    # the collection pattern is recursive — so every directory has to be checked,
-    # not just the root. Deleting a memory inside a subdirectory bumps only that
-    # subdirectory, and the dropped file would otherwise stay searchable forever.
-    dir_changed=$(find "$MEMORIES_DIR" -type d -newer "$TIMESTAMP_FILE" -print -quit 2>/dev/null)
-    [ -n "$newest" ] || [ -n "$dir_changed" ] || exit 0
-fi
-
 # --- Reindex ---
 # Both hook registrations are async, so two runs can overlap on a slow first
 # index. qmd's own embed lock reports contention as success — it prints that
 # another embed is running and exits 0 — so without a mutex here the losing run
-# would mark the index fresh having embedded nothing, and the staleness check
-# would then skip the pending work indefinitely.
+# would clear the failure log having embedded nothing, hiding the pending work
+# behind a clean bill of health.
 #
 # mkdir is the atomic test-and-set. A run killed by the hook timeout cannot
 # release the lock, so a lock older than the timeout is treated as abandoned.
@@ -144,12 +130,9 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
-# Keep the output of a failed run. Gating the timestamp on success stops a
-# failure from concealing itself, but on its own it trades silence for a
-# re-attempt every prompt with still no way to see why. The log is removed on
-# success, so its presence is itself the signal that indexing is broken, and it
-# holds the reason. A doctor check reports it. It lives beside the index it
-# describes, so resetting the index by removing that directory clears it too.
+# Removed on success, so its presence is itself the signal that indexing is broken
+# and it holds the reason. A doctor check reports it. Lives beside the index, so
+# removing that directory clears it too.
 ERROR_LOG="$INDEX_DIR/memory-loop.log"
 
 # `update` rescans the collection for added, changed and removed files; `embed`
@@ -158,10 +141,11 @@ ERROR_LOG="$INDEX_DIR/memory-loop.log"
 qmd --index memory-loop update >"$ERROR_LOG" 2>&1 || exit 0
 qmd --index memory-loop embed >>"$ERROR_LOG" 2>&1 || exit 0
 
-# Confirm the work actually happened rather than trusting an exit code: anything
-# that leaves documents pending must not mark the index fresh, or the staleness
-# check skips them until some other memory changes. This is the case a failing
-# exit code would miss — qmd reports embed-lock contention as success.
+# Exit code is not enough: qmd reports embed-lock contention as success, so a run
+# can leave documents unembedded and still exit 0.
+#
+# `status`, not `update`: `update`'s "needing vectors" count is computed without
+# the embed model, so it reports every hash as pending on a fully embedded index.
 pending=$(qmd --index memory-loop status 2>/dev/null |
             sed -n 's/.*Pending: *\([0-9][0-9]*\).*/\1/p' | head -1)
 if [ "${pending:-0}" -ne 0 ]; then
@@ -170,6 +154,5 @@ if [ "${pending:-0}" -ne 0 ]; then
     exit 0
 fi
 
-# Mark indexing time for subsequent staleness checks, and clear the failure log.
-touch "$TIMESTAMP_FILE"
+# Nothing pending: clear the failure log so its presence stays meaningful.
 rm -f "$ERROR_LOG"
