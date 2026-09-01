@@ -262,7 +262,7 @@ SubagentStart)
                 "  issue ONE mcp__memory-loop__query for the topic of your task first — a\n" +
                 "  lex line of terms you expect verbatim plus a vec line phrased as a\n" +
                 "  question, and an intent saying what you want and what to avoid, with\n" +
-                "  rerank:false and limit:5. One search is far cheaper than a blind\n" +
+                "  rerank:false and limit:6. One search is far cheaper than a blind\n" +
                 "  file sweep. Unlike the main thread, do not try keyword variations: if\n" +
                 "  nothing relevant comes back, move on to the code.\n" +
                 "- Snippets are leads, not evidence — they are capped at 300 characters and\n" +

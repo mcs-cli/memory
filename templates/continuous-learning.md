@@ -6,18 +6,18 @@ Before writing code, planning, or exploring — **always search the knowledge ba
 
    - `lex` takes **keywords you expect verbatim** in the target memory: identifiers, error names, `"quoted phrases"`, `-negation`. It is the only thing that finds a rare exact token, and it also selects the snippet you get back.
    - `vec` takes **prose**: the question as you would ask a colleague. It is what finds a memory that describes your symptom in different words.
-   - `intent` states what you are looking for **and what to avoid**. It steers ranking away from nearby-but-wrong topics and decides which part of a document the snippet shows.
+   - `intent` states what you are looking for **and what to avoid**.
 
    ```
    mcp__memory-loop__query(searches: [{type: "lex", query: "<terms expected verbatim>"},
                                       {type: "vec", query: "<the question, in prose>"}],
                            intent: "<what you want, and what you don't>",
-                           rerank: false, limit: 5)
+                           rerank: false, limit: 6)
    ```
 
-   Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. If nothing fits, re-query with different terms; raising `limit` only appends a tail and never reorders the top 5.
+   Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. If nothing fits, re-query with different terms; raising `limit` only appends a tail and never reorders the results above it.
 
-2. **Retrieve before relying on a result** — a result carries a snippet capped at 300 characters, which is a lead, not evidence; when your `lex` terms are not in the matched text it degrades to the file's first three lines. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
+2. **Retrieve before relying on a result** — a result carries a snippet, which is a lead, not evidence. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
 
 Only after completing these steps should you proceed with discovery and implementation.
 

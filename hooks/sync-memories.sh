@@ -84,17 +84,14 @@ models:
   rerank: $EMBED_MODEL
 global_context: |
   Project memory KB: this project's own past learnings, decisions and debugging
-  discoveries — not external documentation. Pair a typed lex line (terms you
-  expect verbatim) with a vec one and an intent, never the bare query field;
-  rerank:false, limit:5. Snippets are leads, not evidence: call get on a document
-  before relying on it.
+  discoveries — not external documentation.
 EOF
 
-# Kept short on purpose: qmd serves global_context two ways — once as the MCP
-# server's `instructions` (the reason it is here at all) and again as the
-# `context` field of *every* search result. At 591 characters it was 53% of a
-# ten-result response. The fuller explanation lives in the CLAUDE.md template,
-# both skills, and the sub-agent briefing, none of which are echoed per result.
+# Identity only — no search guidance. qmd serves global_context two ways from one
+# knob: the MCP server's `instructions`, once, and the `context` field of *every*
+# search result. Guidance here is paid for per result and is the only copy an
+# install already has via the CLAUDE.md template, which is isRequired. At 342
+# characters it was 38% of a six-result response; at ~120 it is 13%.
 #
 # Replaced only when the content actually differs, so a no-op run leaves the
 # mtime alone. Comparing whole files rather than probing for one line is what
