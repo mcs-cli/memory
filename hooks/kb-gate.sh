@@ -260,8 +260,9 @@ SubagentStart)
                 "  do NOT re-derive it.\n" +
                 "- Otherwise, if you are about to read or grep more than a couple of files,\n" +
                 "  issue ONE mcp__memory-loop__query for the topic of your task first — a\n" +
-                "  lex line of distinctive terms plus a vec line phrased as a question,\n" +
-                "  with rerank:false and limit:5. One search is far cheaper than a blind\n" +
+                "  lex line of terms you expect verbatim plus a vec line phrased as a\n" +
+                "  question, and an intent saying what you want and what to avoid, with\n" +
+                "  rerank:false and limit:5. One search is far cheaper than a blind\n" +
                 "  file sweep. Unlike the main thread, do not try keyword variations: if\n" +
                 "  nothing relevant comes back, move on to the code.\n" +
                 "- Snippets are leads, not evidence — they are capped at 300 characters and\n" +

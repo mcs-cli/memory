@@ -99,10 +99,14 @@ If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, re
 **Always search the memory index first** (semantic search across this project's memories):
 
 ```
-mcp__memory-loop__query(searches: [{type: "lex", query: "<terms>"},
-                                   {type: "vec", query: "<topic>"}],
-                        intent: "<what you are looking for>", rerank: false, limit: 5)
+mcp__memory-loop__query(searches: [{type: "lex", query: "<terms expected verbatim>"},
+                                   {type: "vec", query: "<topic, in prose>"}],
+                        intent: "<what you want, and what you don't>", rerank: false, limit: 5)
 ```
+
+`lex` takes terms you expect to appear in the memory itself, not guesses — it selects the snippet
+as well as the matches. `intent` naming what to avoid is what separates a near-duplicate from an
+unrelated neighbour.
 
 **Fall back to file listing** if the search returns no results or the index is not yet built:
 

@@ -82,9 +82,10 @@ models:
   rerank: $EMBED_MODEL
 global_context: |
   Project memory KB: this project's own past learnings, decisions and debugging
-  discoveries — not external documentation. Pair a typed lex line with a vec one
-  plus an intent, never the bare query field; rerank:false, limit:5. Snippets are
-  leads, not evidence: call get on a document before relying on it.
+  discoveries — not external documentation. Pair a typed lex line (terms you
+  expect verbatim) with a vec one and an intent, never the bare query field;
+  rerank:false, limit:5. Snippets are leads, not evidence: call get on a document
+  before relying on it.
 EOF
 
 # Kept short on purpose: qmd serves global_context two ways — once as the MCP
