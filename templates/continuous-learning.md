@@ -4,7 +4,7 @@ Before writing code, planning, or exploring — **always search the knowledge ba
 
 1. **Search the KB** — use `mcp__memory-loop__query`. It searches this project's own `.claude/memories/` — past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Always pair the two line types — they answer different questions and neither is sufficient alone:
 
-   - `lex` takes **keywords you expect verbatim** in the target memory: identifiers, error names, `"quoted phrases"`, `-negation`, prefix matching (`perf` matches `performance`). It is the only thing that finds a rare exact token. Guessed keywords cost twice — they miss, *and* they pick the snippet you get back.
+   - `lex` takes **keywords you expect verbatim** in the target memory: identifiers, error names, `"quoted phrases"`, `-negation`. It is the only thing that finds a rare exact token, and it also selects the snippet you get back.
    - `vec` takes **prose**: the question as you would ask a colleague. It is what finds a memory that describes your symptom in different words.
    - `intent` states what you are looking for **and what to avoid**. It steers ranking away from nearby-but-wrong topics and decides which part of a document the snippet shows.
 
@@ -15,7 +15,7 @@ Before writing code, planning, or exploring — **always search the knowledge ba
                            rerank: false, limit: 5)
    ```
 
-   Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. If nothing fits, re-query with different terms; raising `limit` only appends a tail and never reorders the top 5. Raise it only to survey a topic rather than to answer a question.
+   Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. If nothing fits, re-query with different terms; raising `limit` only appends a tail and never reorders the top 5.
 
 2. **Retrieve before relying on a result** — a result carries a snippet capped at 300 characters, which is a lead, not evidence; when your `lex` terms are not in the matched text it degrades to the file's first three lines. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
 

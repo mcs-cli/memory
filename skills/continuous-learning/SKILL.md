@@ -104,10 +104,6 @@ mcp__memory-loop__query(searches: [{type: "lex", query: "<terms expected verbati
                         intent: "<what you want, and what you don't>", rerank: false, limit: 5)
 ```
 
-`lex` takes terms you expect to appear in the memory itself, not guesses — it selects the snippet
-as well as the matches. `intent` naming what to avoid is what separates a near-duplicate from an
-unrelated neighbour.
-
 **Fall back to file listing** if the search returns no results or the index is not yet built:
 
 ```
