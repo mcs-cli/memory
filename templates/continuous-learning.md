@@ -16,7 +16,7 @@ Before writing code, planning, or exploring — **always search the knowledge ba
 
    Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. Judge the snippets, and try a different phrasing if nothing fits.
 
-2. **Read matching memories** — review any relevant results for full context (architecture decisions, gotchas, patterns from past sessions).
+2. **Retrieve before relying on a result** — a result carries a snippet capped at 300 characters, which is a lead, not evidence; when your `lex` terms are not in the matched text it degrades to the file's first three lines. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
 
 Only after completing these steps should you proceed with discovery and implementation.
 

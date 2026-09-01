@@ -110,6 +110,10 @@ mcp__memory-loop__query(searches: [{type: "lex", query: "<terms>"},
 Glob(pattern: ".claude/memories/*.md")
 ```
 
+**Read the candidates with `mcp__memory-loop__get` before deciding.** Result snippets are capped
+at 300 characters and often show only a document's title, so a merge-or-skip call made from them
+is a guess — and the cost of guessing wrong is a duplicate memory or a lost refinement.
+
 Decide what to do, in this order of preference:
 
 1. **Knowledge is already captured.** Skip.

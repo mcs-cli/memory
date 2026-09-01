@@ -81,12 +81,10 @@ models:
   generate: $EMBED_MODEL
   rerank: $EMBED_MODEL
 global_context: |
-  Project memory KB: prior learnings, decisions and debugging discoveries. Not
-  external documentation. Search with searches:[{type:"lex", query:"distinctive
-  terms"},{type:"vec", query:"the question in prose"}] plus an intent, with
-  rerank:false and limit:5. Ranks past 5 never add a hit here, and a bare query
-  string is slower and scores worse. Scores are 1/rank, not confidence — judge
-  the snippets.
+  Project memory KB: this project's own past learnings, decisions and debugging
+  discoveries — not external documentation. Pair a typed lex line with a vec one
+  plus an intent, never the bare query field; rerank:false, limit:5. Snippets are
+  leads, not evidence: call get on a document before relying on it.
 EOF
 
 # Kept short on purpose: qmd serves global_context two ways — once as the MCP
