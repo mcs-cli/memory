@@ -91,6 +91,20 @@ j_search() {
         '{hook_event_name:"PostToolUse",session_id:$s,tool_input:{query:$q}}'
 }
 
+# A hybrid call carries `searches`, not `query`, so a recorder that reads only
+# `query` records nothing and the barrier denies forever. `intent` is deliberately
+# not a third shape: it never searches on its own, so it must not create a record.
+j_search_intent() {
+    jq -nc --arg s "$sid" --arg i "${1:-intent only}" \
+        '{hook_event_name:"PostToolUse",session_id:$s,tool_input:{intent:$i}}'
+}
+j_search_typed() {
+    jq -nc --arg s "$sid" --arg a "${1:-lex terms}" --arg b "${2:-vec phrasing}" \
+        '{hook_event_name:"PostToolUse",session_id:$s,
+          tool_input:{searches:[{type:"lex",query:$a},{type:"vec",query:$b}]}}'
+}
+
+
 # j_spawn [prompt] [agent_type] [agent_id]
 j_spawn() {
     jq -nc --arg s "$sid" --arg p "${1:-find the thing}" \
@@ -289,6 +303,33 @@ assert_silent "no stray temp files" "$(find "$state" -name '*.tmp' 2>/dev/null)"
 # still over it and the rewrite would fire on every turn.
 assert_num "retained tail stays well clear of the cap" \
     "$((LOG_KEEP_LINES * 200))" -lt "$((LOG_MAX_BYTES / 2))"
+
+group "both searching shapes are recorded"
+
+# Without this the gate fails silently rather than loudly: nothing is written,
+# no error is raised, and every subsequent spawn is denied for a search that
+# did happen.
+queries() { tail -1 "$state/$sid.queries" 2>/dev/null; }
+
+new_session
+run "$mode" "$proj" "$(j_search "plain query field")" >/dev/null
+assert_contains "a single-string query" "$(queries)" "plain query field"
+
+new_session
+run "$mode" "$proj" "$(j_search_typed "counter state" "why not wall clock")" >/dev/null
+assert_contains "typed lex+vec searches are joined" "$(queries)" "counter state why not wall clock"
+
+new_session
+run "$mode" "$proj" "$(j_search_typed "hybrid" "hybrid")" >/dev/null
+assert_allow "a typed search satisfies the barrier" "$(spawn "$KB — from a typed search")"
+
+# `intent` is context, not a search: qmd rejects a call carrying neither `query`
+# nor `searches`, so treating it as evidence would let a request that retrieved
+# nothing open the barrier.
+new_session
+run "$mode" "$proj" "$(j_search_intent "narrowing the topic")" >/dev/null
+assert_silent "an intent-only call records nothing" "$(queries)"
+assert_deny "and does not satisfy the barrier" "$(spawn "$KB — but no search ran")"
 
 # ==========================================================================
 

@@ -4,7 +4,7 @@
 #
 # One dispatcher registered on four events, branching on `hook_event_name`:
 #   UserPromptSubmit  → stamp the turn boundary, and run housekeeping
-#   PostToolUse       → record a successful search_docs query
+#   PostToolUse       → record a successful KB search
 #   PreToolUse        → judge a sub-agent spawn, and warn or block
 #   SubagentStart     → tell a discovery sub-agent the KB exists
 #
@@ -14,7 +14,7 @@
 #   - NEVER exit 2. That blocks unconditionally, turning a script bug into a hard
 #     gate with no escape. This is also why `set -u`/`set -e` are omitted: an
 #     unset variable should fall through to a silent allow, not abort mid-branch.
-#   - NEVER call docs-mcp-server here. That CLI takes seconds; PreToolUse runs
+#   - NEVER call qmd here. That CLI loads an embedding model; PreToolUse runs
 #     before every sub-agent spawn. File stats only.
 #   - Log every evaluation. Comparing log line count against the spawn count in a
 #     session transcript is the only way to catch a matcher that matches nothing.
@@ -102,11 +102,10 @@ EOF
 # worth more than the fork.
 resolve_paths() {
     [ -n "$project_root" ] && return 0
+    # keep in sync with hooks/sync-memories.sh — that hook indexes the memories
+    # directory this one gates on, and both must land on the same project.
     project_root=$(git rev-parse --show-toplevel 2>/dev/null)
     [ -n "$project_root" ] || project_root="${CLAUDE_PROJECT_DIR:-$PWD}"
-    # keep in sync with hooks/sync-memories.sh project root + library derivation —
-    # the library name quoted back to Claude has to be the one that was indexed.
-    library="${project_root##*/}"
     MEMORIES_DIR="$project_root/.claude/memories"
     LOG_FILE="$project_root/.claude/.kb-gate.log"
     STATE_DIR="$project_root/.claude/.kb-gate"
@@ -219,7 +218,18 @@ PostToolUse)
     # A KB search landed. Store the query text (not just the turn) so the barrier
     # can become topical later without a state migration. The number of lines
     # matching the current turn is also what stamps a denial's progress marker.
-    query=$(jq -r '.tool_input.query // ""' <<<"$payload" 2>/dev/null)
+    # The search tool takes *either* a single `query` or a list of typed
+    # `searches`, never both. Reading only `query` would miss every hybrid
+    # lex+vec call — the form this pack steers Claude toward — and the barrier
+    # would then deny forever with nothing to show why.
+    # Only the two shapes that actually search: a bare `query`, or the joined
+    # text of typed `searches`. `intent` is context and never searches on its
+    # own, so accepting it would let a request that retrieved nothing satisfy
+    # the barrier. Built as a list rather than a `//` chain: `//` only falls
+    # through on null, so an empty join would stop it, and `null | map` raises.
+    query=$(jq -r '[.tool_input.query,
+                    ((.tool_input.searches // []) | map(.query) | join(" "))]
+                   | map(select(. != null and . != "")) | first // ""' <<<"$payload" 2>/dev/null)
     [ -n "$query" ] || exit 0
     ensure_state || exit 0
     printf '%s\t%s\n' "$(current_turn)" "$query" >>"$QUERIES_FILE" 2>/dev/null || true
@@ -238,20 +248,26 @@ SubagentStart)
     # Cost is bounded on purpose: skip the search entirely when the prompt already
     # carries findings, and spend at most one query otherwise. SubagentStart input
     # does not include the prompt, so the agent has to make that call itself.
-    jq -nc --arg e "$event" --arg m "$KB_MARKER" --arg lib "$library" '{
+    jq -nc --arg e "$event" --arg m "$KB_MARKER" '{
         hookSpecificOutput: {
             hookEventName: $e,
             additionalContext: (
                 "This project keeps a knowledge base of past learnings, decisions, and\n" +
                 "debugging discoveries in .claude/memories/, searchable with\n" +
-                "mcp__docs-mcp-server__search_docs using library=\"" + $lib + "\".\n\n" +
+                "mcp__memory-loop__query.\n\n" +
                 "- If your prompt contains a \"" + $m + "\" block, treat it as established\n" +
                 "  ground truth. Verify it against the code, but do NOT search the KB and\n" +
                 "  do NOT re-derive it.\n" +
                 "- Otherwise, if you are about to read or grep more than a couple of files,\n" +
-                "  issue ONE search_docs query for the topic of your task first — one search\n" +
-                "  is far cheaper than a blind file sweep. Unlike the main thread, do not try\n" +
-                "  keyword variations: if nothing relevant comes back, move on to the code.\n" +
+                "  issue ONE mcp__memory-loop__query for the topic of your task first — a\n" +
+                "  lex line of terms you expect verbatim plus a vec line phrased as a\n" +
+                "  question, and an intent saying what you want and what to avoid, with\n" +
+                "  rerank:false and limit:6. One search is far cheaper than a blind\n" +
+                "  file sweep. Unlike the main thread, do not try keyword variations: if\n" +
+                "  nothing relevant comes back, move on to the code.\n" +
+                "- Snippets are leads, not evidence — they are capped at 300 characters and\n" +
+                "  often show only a title. mcp__memory-loop__get a document before relying\n" +
+                "  on what it says.\n" +
                 "- Report back anything the KB got wrong or left out."
             )
         }
@@ -317,7 +333,7 @@ PreToolUse)
 
     # Name whichever half failed, so the message is actionable.
     missing=""
-    [ "$fresh_query" = false ] && missing="no search_docs call has run since this turn began"
+    [ "$fresh_query" = false ] && missing="no KB search has run since this turn began"
     [ "$had_kb_block" = false ] &&
         missing="${missing:+$missing, and }the prompt has no \"$KB_MARKER\" block"
 
@@ -377,7 +393,7 @@ EOF
         # Phrased as a missing prerequisite plus an explicit retry instruction. A
         # bare denial reads as "the user declined" and makes Claude abandon the
         # path instead of satisfying the requirement.
-        jq -nc --arg e "$event" --arg r "Prerequisite missing: $missing. Call search_docs(library=\"$library\", query=\"<your topic>\") first, then re-issue this exact call with a \"$KB_MARKER\" block (1-5 bullets of findings, or \"$KB_MARKER none relevant.\") at the top of the prompt. Spawning several agents at once: write the findings to a scratchpad file and open each prompt with \"$KB_MARKER see <path>\" instead of repeating them. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch." \
+        jq -nc --arg e "$event" --arg r "Prerequisite missing: $missing. Search the KB with mcp__memory-loop__query first, then re-issue this exact call with a \"$KB_MARKER\" block (1-5 bullets of findings, or \"$KB_MARKER none relevant.\") at the top of the prompt. Spawning several agents at once: write the findings to a scratchpad file and open each prompt with \"$KB_MARKER see <path>\" instead of repeating them. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch." \
             '{hookSpecificOutput:{hookEventName:$e,permissionDecision:"deny",permissionDecisionReason:$r}}'
         exit 0
     fi
@@ -385,7 +401,7 @@ EOF
     # warn: advise without blocking. No permissionDecision field — returning
     # "allow" would bypass the normal permission flow.
     log_decision false warn
-    jq -nc --arg e "$event" --arg m "KB protocol: $missing. Sub-agents cannot see your KB results, so this agent will rediscover from scratch. Before the next spawn, search the KB (library=\"$library\") and open the prompt with a \"$KB_MARKER\" block." \
+    jq -nc --arg e "$event" --arg m "KB protocol: $missing. Sub-agents cannot see your KB results, so this agent will rediscover from scratch. Before the next spawn, search the KB and open the prompt with a \"$KB_MARKER\" block." \
         '{hookSpecificOutput:{hookEventName:$e,additionalContext:$m}}'
     ;;
 esac

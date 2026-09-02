@@ -1,0 +1,30 @@
+name: sync-memories-test
+
+on:
+  pull_request:
+    paths:
+      - "hooks/sync-memories.sh"
+      - "tests/sync-memories-test.sh"
+      - ".github/workflows/sync-memories-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "hooks/sync-memories.sh"
+      - "tests/sync-memories-test.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-memories-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # qmd is stubbed, so no model or index is needed.
+      - name: Run the sync-memories suite
+        run: bash tests/sync-memories-test.sh

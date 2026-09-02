@@ -18,7 +18,7 @@ mcs sync --global                 # 3. install globally (~/.claude)
 mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Ollama](https://ollama.com) (local embeddings runtime). `mcs` installs the rest (Node, `gh`, `jq`) automatically.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node 22 or newer. `mcs` installs the rest (Node, `gh`, `jq`, [qmd](https://github.com/tobi/qmd)) automatically, and downloads a ~610 MB embedding model once on first sync — shared by every project, with no daemon left running afterwards.
 
 Global is the recommended scope — this pack has no per-project config, so installing once makes memory available in every project automatically. To scope it to a single repo instead, run `mcs sync` from inside that repo.
 
@@ -32,11 +32,11 @@ flowchart LR
     B --> C[Work session]
     C --> D[Capture learnings & decisions]
     D --> E[(.claude/memories/)]
-    E --> F["Ollama embeddings<br/>semantic index"]
+    E --> F["local embeddings<br/>semantic index"]
     F -. re-index on session start / change .-> B
 ```
 
-1. **Session starts** — a hook re-indexes `.claude/memories/` into a local vector store (Ollama `nomic-embed-text`), in the background.
+1. **Session starts** — a hook re-indexes `.claude/memories/` into a local vector store in the background. Embeddings are computed in-process by `qmd`, so there is no service to start and nothing left running between sessions.
 2. **Before any task** — Claude is instructed to search the knowledge base first, surfacing relevant past learnings and decisions.
 3. **Before delegating** — sub-agents can't see the parent's KB results, so they'd rediscover everything from scratch. A gate hook closes that gap from both ends: it requires the findings to be pasted into the sub-agent's prompt, and tells any discovery agent to search the KB itself if they weren't. Configurable per project, from a reminder up to a hard block.
 4. **During work** — a prompt-submit hook reminds Claude to notice when the current interaction produces knowledge worth saving.
@@ -66,7 +66,7 @@ To change the answer later, re-run `mcs sync` — the mode is baked into the ins
 
 | Component | What it does |
 |---|---|
-| **docs-mcp-server** (MCP) | Read-only semantic search over `.claude/memories/`, backed by local Ollama embeddings |
+| **memory-loop** (MCP) | Semantic search over `.claude/memories/`, backed by a local embedding model |
 | **continuous-learning** (skill) | Extracts learnings and decisions from a session into structured memory files |
 | **memory-audit** (skill) | Reviews existing memories and flags stale or duplicate entries to keep the KB lean |
 | **sync-memories.sh** (hook) | Indexes/re-indexes memories on session start and when they change mid-session |
@@ -81,6 +81,36 @@ Memories come in two flavors, both stored as version-controlled, human-readable 
 
 ---
 
+## Upgrading from the Ollama version
+
+Earlier releases indexed memories through `docs-mcp-server` backed by an Ollama daemon. `mcs sync`
+converges on its own: the old MCP server is deregistered for you, and the new index is built on the
+next session start. Nothing below is required.
+
+What `mcs` cannot clean up is what the old release installed through plain shell commands. If you
+want the disk space back, and **only if nothing else on your machine uses these**:
+
+```bash
+npm uninstall -g @arabold/docs-mcp-server
+rm -rf ~/Library/Application\ Support/docs-mcp-server   # see the warning below
+ollama rm nomic-embed-text
+```
+
+Three things to check before running any of them:
+
+- **`docs-mcp-server` indexes external documentation too.** If you ever pointed it at a library's
+  docs, that is what you would be uninstalling.
+- **Its store is shared across every library you indexed with it**, not just your memories. Deleting
+  the directory deletes all of them. Run `docs-mcp-server list` first and see what is in there.
+- **Ollama may be serving something else.** `ollama list` shows what it holds; if
+  `nomic-embed-text` is the only entry and nothing else here needs the runtime, you can also remove
+  the app and its data — `/Applications/Ollama.app` and `~/.ollama`. Removing the app clears the
+  macOS Login Item it registers.
+
+This pack no longer installs or manages any of them.
+
+---
+
 ## Directory structure
 
 ```
@@ -88,7 +118,7 @@ memory/
 ├── techpack.yaml                        # Manifest — defines all components
 ├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
-│   ├── sync-memories.sh                 # Ollama health + memory indexing/reindexing
+│   ├── sync-memories.sh                 # Memory indexing/reindexing
 │   ├── continuous-learning-activator.sh # Knowledge extraction reminder
 │   └── kb-gate.sh                       # Keeps KB lookups ahead of delegated discovery
 ├── skills/

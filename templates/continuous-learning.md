@@ -2,8 +2,22 @@
 
 Before writing code, planning, or exploring — **always search the knowledge base first**:
 
-1. **Search the KB** — use the `docs-mcp-server` tools (`search_docs`) and set the `library` parameter to the name of the current project folder. The library name always matches the root directory name of this project. This server indexes `.claude/memories/` — it contains past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Try multiple keyword variations if needed.
-2. **Read matching memories** — review any relevant results for full context (architecture decisions, gotchas, patterns from past sessions).
+1. **Search the KB** — use `mcp__memory-loop__query`. It searches this project's own `.claude/memories/` — past learnings, debugging discoveries, and architectural decisions from previous sessions, not external documentation. Always pair the two line types — they answer different questions and neither is sufficient alone:
+
+   - `lex` takes **keywords you expect verbatim** in the target memory: identifiers, error names, `"quoted phrases"`, `-negation`. It is the only thing that finds a rare exact token, and it also selects the snippet you get back.
+   - `vec` takes **prose**: the question as you would ask a colleague. It is what finds a memory that describes your symptom in different words.
+   - `intent` states what you are looking for **and what to avoid**.
+
+   ```
+   mcp__memory-loop__query(searches: [{type: "lex", query: "<terms expected verbatim>"},
+                                      {type: "vec", query: "<the question, in prose>"}],
+                           intent: "<what you want, and what you don't>",
+                           rerank: false, limit: 6)
+   ```
+
+   Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. If nothing fits, re-query with different terms; raising `limit` only appends a tail and never reorders the results above it.
+
+2. **Retrieve before relying on a result** — a result carries a snippet, which is a lead, not evidence. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
 
 Only after completing these steps should you proceed with discovery and implementation.
 
@@ -21,7 +35,7 @@ Past sessions often contain decisions and patterns that prevent unnecessary iter
 
 ### Delegation barrier
 
-`search_docs` and any sub-agent spawn (the `Agent` / `Task` tool) are **not** independent calls —
+`mcp__memory-loop__query` and any sub-agent spawn (the `Agent` / `Task` tool) are **not** independent calls —
 the KB result is an *input* to the sub-agent's prompt. Never place them in the same message, and
 never spawn a sub-agent before you have read the KB results.
 
