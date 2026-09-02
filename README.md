@@ -36,7 +36,11 @@ Global installation is recommended because the pack has no per-project configura
 ## How the loop works
 
 <p align="center">
-  <img src="assets/the-memory-loop.png" alt="The Memory Loop: sessions search existing knowledge, follow the usual workflow, save valuable conclusions, and re-index them for the next session" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/the-memory-loop-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/the-memory-loop-light.svg">
+    <img src="assets/the-memory-loop-light.svg" alt="The Memory Loop: sessions search existing knowledge, follow the usual workflow, save valuable conclusions, and re-index them for the next session" width="900">
+  </picture>
 </p>
 
 1. **Search** — before a task, Claude searches the project's knowledge base for relevant past learnings and decisions.
