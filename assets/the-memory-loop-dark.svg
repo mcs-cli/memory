@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024" role="img" aria-labelledby="title desc">
+  <title id="title">The Memory Loop</title>
+  <desc id="desc">Sessions search existing knowledge, follow the usual workflow, save valuable conclusions, and re-index them for the next session.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1l10 5-10 5z" fill="#aab4c4"/>
+    </marker>
+    <filter id="violetGlow" x="-30%" y="-50%" width="160%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feFlood flood-color="#9b87f5" flood-opacity=".24"/><feComposite in2="b" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="blueGlow" x="-30%" y="-50%" width="160%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feFlood flood-color="#60a5fa" flood-opacity=".22"/><feComposite in2="b" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="mintGlow" x="-30%" y="-50%" width="160%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feFlood flood-color="#6ee7b7" flood-opacity=".22"/><feComposite in2="b" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="amberGlow" x="-30%" y="-50%" width="160%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feFlood flood-color="#f6c760" flood-opacity=".22"/><feComposite in2="b" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <style>
+      .flow{fill:none;stroke:#aab4c4;stroke-width:4;marker-end:url(#arrow)}
+      .dash{stroke-dasharray:12 10}
+      .card{fill:#111827;stroke-width:4}
+      .heading{fill:#f9fafb;font:700 31px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-anchor:middle}
+      .sub{fill:#d0d5dd;font:24px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-anchor:middle}
+      .label{fill:#c8d0dc;font:22px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-anchor:middle;letter-spacing:.5px}
+      .center{fill:#c8d0dc;font:22px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-anchor:middle}
+    </style>
+  </defs>
+
+  <path class="flow" d="M263 384C300 248 393 174 522 158"/>
+  <path class="flow" d="M1011 158c139 19 229 112 267 226"/>
+  <path class="flow" d="M1274 600c-23 126-124 210-268 234"/>
+  <path class="flow" d="M531 834c-145-21-240-101-273-237"/>
+  <text class="label" x="255" y="205">NEXT SESSION</text>
+  <text class="label" x="1280" y="205">SEARCHES FIRST</text>
+  <text class="label" x="1305" y="783">STARTS INFORMED</text>
+  <text class="label" x="238" y="783">SESSION ENDS</text>
+
+  <path class="flow dash" d="M460 487h190"/>
+  <path class="flow dash" d="M866 487h190"/>
+  <text class="label" x="550" y="459">WRITES</text>
+  <text class="label" x="963" y="459">READS</text>
+  <rect x="660" y="430" width="206" height="124" rx="22" fill="none" stroke="#aab4c4" stroke-width="3" stroke-dasharray="12 9"/>
+  <text class="center" x="763" y="482">INDEXED</text>
+  <text class="center" x="763" y="516">LOCALLY</text>
+
+  <g filter="url(#violetGlow)">
+    <rect class="card" x="536" y="75" width="460" height="172" rx="25" stroke="#9b87f5"/>
+    <text class="heading" x="766" y="153">SESSION STARTS</text>
+    <text class="sub" x="766" y="201">Hook re-indexes the KB</text>
+  </g>
+  <g filter="url(#blueGlow)">
+    <rect class="card" x="1063" y="399" width="423" height="184" rx="25" stroke="#60a5fa"/>
+    <text class="heading" x="1274" y="481">SEARCH WHAT'S KNOWN</text>
+    <text class="sub" x="1274" y="528">Before reading any file</text>
+  </g>
+  <g filter="url(#mintGlow)">
+    <rect class="card" x="547" y="766" width="442" height="172" rx="25" stroke="#6ee7b7"/>
+    <text class="heading" x="768" y="844">WORK</text>
+    <text class="sub" x="768" y="892">Workflow unchanged</text>
+  </g>
+  <g filter="url(#amberGlow)">
+    <rect class="card" x="53" y="399" width="407" height="184" rx="25" stroke="#f6c760"/>
+    <text class="heading" x="256" y="481">KEEP THE VERDICT</text>
+    <text class="sub" x="256" y="528">Save only what matters</text>
+  </g>
+</svg>
