@@ -1,7 +1,7 @@
 schemaVersion: 1
 identifier: memory
-displayName: "Memory"
-description: Persistent memory and knowledge management for Claude Code
+displayName: "The Memory Loop"
+description: Persistent project memory that compounds across Claude Code sessions
 author: Bruno Guidolim
 minMCSVersion: "2026.4.12"
 
@@ -12,7 +12,7 @@ prompts:
   - key: KB_GATE_MODE
     type: select
     label: "KB gate — how strictly must Claude check the KB before delegating?"
-    default: "warn"
+    default: "enforce"
     options:
       - value: "warn"
         label: "Warn — remind and log when a sub-agent is spawned without KB findings"
@@ -341,6 +341,7 @@ components:
 ignore:
   - CLAUDE.md
   - SYNC-BLOCKS.md
+  - assets/
   - tests/
 
 # ---------------------------------------------------------------------------
