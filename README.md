@@ -2,7 +2,7 @@
 
 # The Memory Loop
 
-### Claude Code that learns your codebase, session after session.
+### Project knowledge that outlives the session.
 
 [![MCS tech pack](https://img.shields.io/badge/MCS-tech%20pack-6f42c1)](https://github.com/mcs-cli/mcs)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-d97757)](https://docs.anthropic.com/en/docs/claude-code)
@@ -13,12 +13,17 @@
 
 **The Memory Loop** gives Claude Code persistent, project-specific memory. It captures debugging discoveries, architectural decisions, and local conventions in a searchable knowledge base—then brings the right context back into future sessions. Instead of rediscovering the same lessons, Claude gets increasingly effective at working in *your* codebase.
 
-> The project was formerly called **Memory**, and originally **Continuous Learning**. Its repository, package coordinate, and internal identifiers remain unchanged for compatibility.
-
 ```text
 identifier: memory
 requires:   mcs >= 2026.4.12
 ```
+
+<details>
+<summary>Why the identifier says <code>memory</code></summary>
+
+The project was formerly called **Memory**, and originally **Continuous Learning**. Its repository, pack name, and internal identifiers are unchanged, so existing installs keep working and `mcs pack add mcs-cli/memory` remains the way to add it.
+
+</details>
 
 ## Install
 
@@ -29,11 +34,13 @@ mcs sync --global                 # 3. install globally (~/.claude)
 mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node 22 or newer. `mcs` installs the remaining dependencies (`gh`, `jq`, and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22 or newer (the current qmd requirement). `mcs` installs the remaining dependencies (`gh`, `jq`, and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
 
 Global installation is recommended because the pack has no per-project configuration. Install it once and memory becomes available in every project. To scope it to a single repository instead, run `mcs sync` from inside that repository.
 
 ## How the loop works
+
+**There are no commands to remember.** Once installed, the loop runs automatically. Semantic search retrieves memories only when relevant, so the knowledge base does not unnecessarily consume context.
 
 <p align="center">
   <picture>
@@ -60,7 +67,31 @@ Memories are version-controlled, human-readable Markdown in two formats:
 | **Learnings** | Non-obvious discoveries from debugging, such as `learning_orm_batch_insert_memory_spike.md` | *Problem → Trigger Conditions → Solution → Verification → Example → Notes* |
 | **Decisions** | Deliberate architecture or convention choices, such as `decision_testing_snapshot_strategy.md` | *Decision → Context → Options Considered → Choice → Consequences* |
 
-The `memory-audit` skill reviews the collection over time, flagging stale or duplicate entries so the knowledge base stays useful rather than merely growing.
+A learning ends up looking like this—the verdict, not the transcript that produced it:
+
+```markdown
+# Learning: Batch inserts above 500 rows spike memory
+
+**Applies to:** billing-service
+
+## Problem
+The bulk importer holds an entire batch in memory before flushing, so a
+5,000-row import peaks near 2 GB and the worker is OOM-killed.
+
+## Trigger Conditions
+- Any single batch-insert call above ~500 rows
+- Only in the import worker; the request path never batches this large
+
+## Solution
+Chunk at 250 rows and flush between chunks.
+
+## Verification
+The same 5,000-row import peaks at 180 MB.
+```
+
+The next session that touches the importer finds this in one search, instead of reproducing the OOM to learn it again.
+
+The `memory-audit` skill reviews the collection, flagging stale or duplicate entries so the knowledge base stays useful rather than merely growing. It is the one part of the pack that never runs on its own—ask for it (*"audit memories"*) when the collection needs a review.
 
 ## Gate modes
 
