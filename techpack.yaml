@@ -30,8 +30,20 @@ components:
   # ── Dependencies ────────────────────────────────────────────────────────
   - id: node
     displayName: Node.js
-    description: JavaScript runtime (for npx-based MCP servers)
+    description: JavaScript runtime (>=22, required by qmd)
     brew: node
+    doctorChecks:
+      - type: commandExists
+        name: "Node.js is version 22 or newer"
+        section: Runtime
+        command: /bin/sh
+        args:
+          - "-c"
+          - |
+            PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+            v=$(node --version 2>/dev/null); v=${v#v}; v=${v%%.*}
+            [ -n "$v" ] && [ "$v" -ge 22 ]
+        fixCommand: "brew upgrade node"
 
   - id: gh
     displayName: GitHub CLI
