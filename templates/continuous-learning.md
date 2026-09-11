@@ -19,6 +19,13 @@ Before writing code, planning, or exploring — **always search the knowledge ba
 
 2. **Retrieve before relying on a result** — a result carries a snippet, which is a lead, not evidence. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
 
+   ```
+   mcp__memory-loop__get(file: "memories/foo.md")        # or file: "#docid" from a query hit
+   mcp__memory-loop__multi_get(pattern: "memories/foo.md,memories/bar.md")
+   ```
+
+   The parameters are `file` and `pattern` — not `path`, `docid`, or `paths`. `pattern` also takes a glob (`memories/decision_*.md`) or a comma-separated list of `#docid`s.
+
 Only after completing these steps should you proceed with discovery and implementation.
 
 ### When to re-check mid-session
