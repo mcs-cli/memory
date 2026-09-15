@@ -165,23 +165,6 @@ memory/
     └── continuous-learning.md           # "Search KB before any task"
 ```
 
-## Development
-
-The gate and indexing hooks are `.mts` modules run with `node --experimental-strip-types --disable-warning=ExperimentalWarning`. There is no build step and no runtime npm dependency. MCS installs the shared library beside the hooks as `hooks/memory/shared.mts`, for both global and project installs. The static `memory-loop-activator.sh` reminder stays in shell to avoid starting Node on every prompt just to print text. The small install, MCP launch, and doctor commands also stay in shell inside the manifest.
-
-```sh
-npm ci
-npm run typecheck
-npm test
-npm test                       # Run twice when changing gate state handling
-npm run check:sync
-mcs pack validate
-```
-
-Tests run in temporary projects outside the checkout and stub qmd, so they need no model download. CI runs only for pull requests targeting `main`, checking Node 22.6, current 22 and 24, and the latest Node release on macOS.
-
-After editing, run `mcs sync` in the target project (or `mcs sync --global`) to install the new files and hook commands. This also removes the old managed shell hooks. Existing indexes and gate state use the same paths and formats.
-
 ## Companion pack
 
 **[shared-memories](https://github.com/mcs-cli/shared-memories)** extends The Memory Loop by syncing `.claude/memories/` across teammates through a dedicated Git repository. Install both for team-shared memory: `mcs-cli/memory` captures and retrieves knowledge, while `shared-memories` distributes it.

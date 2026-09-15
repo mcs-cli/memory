@@ -57,6 +57,7 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.STUB_LOG, JSON.stringify({args, config: process.env.QMD_CONFIG_DIR, index: process.env.INDEX_PATH}) + '\\n');
 const command = args[2];
 const mode = process.env.STUB_MODE || 'ok';
+if (command === 'status' && mode === 'status_fails_silently') process.exit(7);
 if (mode === command + '_fails') { console.error(command + ' exploded'); process.exit(1); }
 if (command === 'update') { fs.writeFileSync(process.env.INDEX_PATH, ''); console.log('All collections updated.'); }
 if (command === 'embed') console.log('All content hashes already have embeddings.');

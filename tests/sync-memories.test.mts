@@ -58,7 +58,7 @@ test("config is registered before memories exist, repaired on drift, and stable 
   assert.equal(readFileSync(f.config, "utf8"), expected);
 });
 
-for (const mode of ["update_fails", "embed_fails", "pending"]) {
+for (const mode of ["update_fails", "embed_fails", "status_fails", "pending"]) {
   test(`${mode} leaves a diagnostic log and releases its lock`, t => {
     const f = indexer(t);
     const calls = f.run(mode).map(call => call.args[2]);
@@ -70,12 +70,21 @@ for (const mode of ["update_fails", "embed_fails", "pending"]) {
   });
 }
 
-test("cleanup is best effort and an empty status retains the existing success behavior", t => {
+test("status failure without stderr still leaves a diagnostic and releases its lock", t => {
   const f = indexer(t);
-  for (const mode of ["cleanup_fails", "status_fails"]) {
-    assert.ok(f.run(mode).some(call => call.args[2] === "cleanup"));
-    assert.equal(existsSync(f.log), false);
-  }
+  const calls = f.run("status_fails_silently").map(call => call.args[2]);
+  assert.deepEqual(calls, ["update", "embed", "status"]);
+  const log = readFileSync(f.log, "utf8");
+  assert.match(log, /qmd status failed.*exit 7/);
+  assert.match(log, /All collections updated/);
+  assert.match(log, /All content hashes already have embeddings/);
+  assert.equal(existsSync(f.lock), false);
+});
+
+test("cleanup is best effort", t => {
+  const f = indexer(t);
+  assert.ok(f.run("cleanup_fails").some(call => call.args[2] === "cleanup"));
+  assert.equal(existsSync(f.log), false);
 });
 
 test("active locks preserve diagnostics; stale empty locks are recovered", t => {

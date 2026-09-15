@@ -51,7 +51,12 @@ global_context: |
         closeSync(fd);
       }
     }
-    const status = spawnSync("qmd", ["--index", "memory-loop", "status"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const status = spawnSync("qmd", ["--index", "memory-loop", "status"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    if (status.status !== 0) {
+      const reason = status.error?.message ?? status.signal ?? `exit ${status.status}`;
+      writeFileSync(log, `qmd status failed (${reason})\n${status.stdout ?? ""}${status.stderr ?? ""}`, { flag: "a" });
+      return;
+    }
     const pending = status.stdout?.match(/.*Pending: *([0-9]+)/)?.[1] ?? "0";
     if (Number(pending) !== 0) {
       const date = new Date();
