@@ -15,7 +15,7 @@
 
 ```text
 identifier: memory
-requires:   mcs >= 2026.4.12
+requires:   mcs >= 2026.9.3
 ```
 
 <details>
@@ -34,7 +34,7 @@ mcs sync --global                 # 3. install globally (~/.claude)
 mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22 or newer (qmd's runtime requirement — `mcs doctor` reports it if your `node` is older). `mcs` installs the remaining dependencies (`jq` and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22.6 or newer (the hooks run TypeScript directly; `mcs doctor` checks the version). `mcs` installs [qmd](https://github.com/tobi/qmd) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
 
 Global installation is recommended because the pack has no per-project configuration. Install it once and memory becomes available in every project. To scope it to a single repository instead, run `mcs sync` from inside that repository.
 
@@ -115,9 +115,9 @@ To change the mode, run `mcs sync` again. The selection is baked into the instal
 | **memory-loop** (MCP) | Searches `.claude/memories/` semantically using a local embedding model |
 | **continuous-learning** (skill) | Extracts learnings and decisions from a session into structured memory files |
 | **memory-audit** (skill) | Reviews existing memories and flags stale or duplicate entries |
-| **sync-memories.sh** (hook) | Indexes memories at session start and re-indexes them when they change |
-| **continuous-learning-activator.sh** (hook) | Reminds Claude to check for knowledge worth capturing after each prompt |
-| **kb-gate.sh** (hook) | Keeps knowledge-base lookup ahead of delegated discovery work |
+| **sync-memories.mts** (hook) | Indexes memories at session start and re-indexes them when they change |
+| **continuous-learning-activator.mts** (hook) | Reminds Claude to check for knowledge worth capturing after each prompt |
+| **kb-gate.mts** (hook) | Keeps knowledge-base lookup ahead of delegated discovery work |
 | `autoMemoryEnabled: false` (setting) | Disables Claude Code's built-in memory in favor of this system |
 
 ## Upgrading from the Ollama version
@@ -152,15 +152,35 @@ memory/
 ├── techpack.yaml                        # Manifest — defines all components
 ├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
-│   ├── sync-memories.sh                 # Memory indexing/reindexing
-│   ├── continuous-learning-activator.sh # Knowledge extraction reminder
-│   └── kb-gate.sh                       # Keeps KB lookups ahead of delegated discovery
+│   ├── sync-memories.mts                 # Memory indexing/reindexing
+│   ├── continuous-learning-activator.mts # Knowledge extraction reminder
+│   ├── kb-gate.mts                       # Keeps KB lookups ahead of delegated discovery
+│   └── shared.mts                       # Shared filesystem and project-path helpers
+├── scripts/                            # Maintainer checks
+├── tests/                              # Node tests; qmd is stubbed
 ├── skills/
 │   ├── continuous-learning/             # Extraction rules + memory templates
 │   └── memory-audit/                    # Audit workflow (KEEP/DROP/UPDATE)
 └── templates/
     └── continuous-learning.md           # "Search KB before any task"
 ```
+
+## Development
+
+The hooks are `.mts` modules run with `node --experimental-strip-types --disable-warning=ExperimentalWarning`. There is no build step and no runtime npm dependency. MCS installs the shared library beside the hooks as `hooks/memory/shared.mts`, for both global and project installs. The small install, MCP launch, and doctor commands stay inline in the manifest as shell scripts.
+
+```sh
+npm ci
+npm run typecheck
+npm test
+npm test                       # Run twice when changing gate state handling
+npm run check:sync
+mcs pack validate
+```
+
+Tests run in temporary projects outside the checkout and stub qmd, so they need no model download. CI checks Node 22.6, current 22 and 24, and the latest Node release on macOS, plus Node 22 on Linux.
+
+After editing, run `mcs sync` in the target project (or `mcs sync --global`) to install the new files and hook commands. This also removes the old managed shell hooks. Existing indexes and gate state use the same paths and formats.
 
 ## Companion pack
 
