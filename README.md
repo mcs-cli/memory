@@ -15,7 +15,7 @@
 
 ```text
 identifier: memory
-requires:   mcs >= 2026.4.12
+requires:   mcs >= 2026.9.3
 ```
 
 <details>
@@ -34,7 +34,7 @@ mcs sync --global                 # 3. install globally (~/.claude)
 mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22 or newer (qmd's runtime requirement — `mcs doctor` reports it if your `node` is older). `mcs` installs the remaining dependencies (`jq` and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22.6 or newer (the hooks run TypeScript directly; `mcs doctor` checks the version). `mcs` installs [qmd](https://github.com/tobi/qmd) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
 
 Global installation is recommended because the pack has no per-project configuration. Install it once and memory becomes available in every project. To scope it to a single repository instead, run `mcs sync` from inside that repository.
 
@@ -115,9 +115,9 @@ To change the mode, run `mcs sync` again. The selection is baked into the instal
 | **memory-loop** (MCP) | Searches `.claude/memories/` semantically using a local embedding model |
 | **continuous-learning** (skill) | Extracts learnings and decisions from a session into structured memory files |
 | **memory-audit** (skill) | Reviews existing memories and flags stale or duplicate entries |
-| **sync-memories.sh** (hook) | Indexes memories at session start and re-indexes them when they change |
-| **continuous-learning-activator.sh** (hook) | Reminds Claude to check for knowledge worth capturing after each prompt |
-| **kb-gate.sh** (hook) | Keeps knowledge-base lookup ahead of delegated discovery work |
+| **sync-memories.mts** (hook) | Indexes memories at session start and re-indexes them when they change |
+| **memory-loop-activator.sh** (hook) | Reminds Claude to check for knowledge worth capturing after each prompt |
+| **kb-gate.mts** (hook) | Keeps knowledge-base lookup ahead of delegated discovery work |
 | `autoMemoryEnabled: false` (setting) | Disables Claude Code's built-in memory in favor of this system |
 
 ## Upgrading from the Ollama version
@@ -152,9 +152,12 @@ memory/
 ├── techpack.yaml                        # Manifest — defines all components
 ├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
-│   ├── sync-memories.sh                 # Memory indexing/reindexing
-│   ├── continuous-learning-activator.sh # Knowledge extraction reminder
-│   └── kb-gate.sh                       # Keeps KB lookups ahead of delegated discovery
+│   ├── sync-memories.mts                 # Memory indexing/reindexing
+│   ├── memory-loop-activator.sh         # Knowledge extraction reminder
+│   ├── kb-gate.mts                       # Keeps KB lookups ahead of delegated discovery
+│   └── shared.mts                       # Shared filesystem and project-path helpers
+├── scripts/                            # Maintainer checks
+├── tests/                              # Node tests; qmd is stubbed
 ├── skills/
 │   ├── continuous-learning/             # Extraction rules + memory templates
 │   └── memory-audit/                    # Audit workflow (KEEP/DROP/UPDATE)

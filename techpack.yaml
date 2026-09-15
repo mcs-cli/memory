@@ -3,7 +3,7 @@ identifier: memory
 displayName: "The Memory Loop"
 description: Persistent project memory that compounds across Claude Code sessions
 author: Bruno Guidolim
-minMCSVersion: "2026.4.12"
+minMCSVersion: "2026.9.3"
 
 # ---------------------------------------------------------------------------
 # Prompts — asked once per project during `mcs sync`, then remembered
@@ -30,25 +30,20 @@ components:
   # ── Dependencies ────────────────────────────────────────────────────────
   - id: node
     displayName: Node.js
-    description: JavaScript runtime (>=22, required by qmd)
+    description: Node 22.6+ runs the TypeScript hooks directly, with no build step
     brew: node
     doctorChecks:
       - type: commandExists
-        name: "Node.js is version 22 or newer"
+        name: "Node.js is version 22.6 or newer"
         section: Runtime
         command: /bin/sh
         args:
           - "-c"
           - |
             PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
-            v=$(node --version 2>/dev/null); v=${v#v}; v=${v%%.*}
-            [ -n "$v" ] && [ "$v" -ge 22 ]
+            node -e 'const [major, minor] = process.versions.node.split(".").map(Number);
+              process.exit(major > 22 || (major === 22 && minor >= 6) ? 0 : 1)'
         fixCommand: "brew upgrade node"
-
-  - id: jq
-    displayName: jq
-    description: Lightweight JSON processor
-    brew: jq
 
   # ── Retrieval engine ────────────────────────────────────────────────────
   # Pinned so no package manager runs inside a hook, and because the rerank and
@@ -125,7 +120,7 @@ components:
   # has to exist everywhere that instruction does. An empty index is honest: the
   # server reports "0 markdown documents" in its own instructions.
   #
-  # keep in sync with hooks/sync-memories.sh — it writes the index this opens.
+  # keep in sync with hooks/sync-memories.mts — it writes the index this opens.
   - id: memory-loop
     description: Semantic search over this project's memories, backed by local embeddings
     isRequired: true
@@ -221,38 +216,48 @@ components:
       destination: memory-audit
 
   # ── Hooks ───────────────────────────────────────────────────────────────
+  - id: hook-helpers
+    displayName: Shared hook helpers
+    description: Shared filesystem and project-path helpers for the hooks
+    dependencies: [node]
+    hook:
+      source: hooks/shared.mts
+      destination: shared.mts
+
   - id: hook-continuous-learning
-    displayName: Continuous learning activator
+    displayName: Memory loop activator
     description: Reminds to evaluate learnings on each prompt
     isRequired: true
     hookEvent: UserPromptSubmit
     hook:
-      source: hooks/continuous-learning-activator.sh
-      destination: continuous-learning-activator.sh
+      source: hooks/memory-loop-activator.sh
+      destination: memory-loop-activator.sh
 
   - id: hook-sync-memories
     displayName: Sync memories hook
     description: Indexes memories into the project's search index on session start
-    dependencies: [qmd-install, jq]
+    dependencies: [qmd-install, hook-helpers]
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: SessionStart
     hookAsync: true
     hookTimeout: 120
     hookStatusMessage: "Indexing memories..."
     hook:
-      source: hooks/sync-memories.sh
-      destination: sync-memories.sh
+      source: hooks/sync-memories.mts
+      destination: sync-memories.mts
 
   - id: hook-reindex-memories
     displayName: Reindex memories hook
     description: Reindexes memories when they have changed mid-session
-    dependencies: [qmd-install, jq]
+    dependencies: [qmd-install, hook-helpers]
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: UserPromptSubmit
     hookAsync: true
     hookTimeout: 120
     hookStatusMessage: "Reindexing memories..."
     hook:
-      source: hooks/sync-memories.sh
-      destination: sync-memories.sh
+      source: hooks/sync-memories.mts
+      destination: sync-memories.mts
 
   # ── KB-first delegation ─────────────────────────────────────────────────
   # Four registrations of one dispatcher script, which branches on
@@ -263,11 +268,12 @@ components:
   - id: hook-kb-gate-turn
     displayName: KB gate — turn boundary
     description: Marks each new prompt so the KB check is required again per turn
-    dependencies: [jq]
+    dependencies: [hook-helpers]
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: UserPromptSubmit
     hook:
-      source: hooks/kb-gate.sh
-      destination: kb-gate.sh
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
     # Checked because losing this one corrupts the gate rather than disabling it:
     # with no turn stamp the counter reads 0 forever, so every search ever made in
     # the session counts as fresh and the barrier silently widens from per-turn to
@@ -281,12 +287,13 @@ components:
   - id: hook-kb-gate-record
     displayName: KB gate — record searches
     description: Records each KB search so delegated discovery can be checked against it
-    dependencies: [jq]
+    dependencies: [hook-helpers]
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
     hookMatcher: "mcp__memory-loop__query"
     hook:
-      source: hooks/kb-gate.sh
-      destination: kb-gate.sh
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
     # Same reasoning: without this, no search is ever recorded and the gate is
     # pure friction until the budget releases it.
     doctorChecks:
@@ -298,14 +305,15 @@ components:
   - id: hook-kb-gate-check
     displayName: KB gate — check sub-agent spawns
     description: Warns or blocks when a discovery sub-agent is spawned without KB findings in its prompt
-    dependencies: [jq]
+    dependencies: [hook-helpers]
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PreToolUse
     # The spawn tool is `Agent` in current Claude Code and `Task` in older
     # builds. Matching only `Task` silently matches nothing.
     hookMatcher: "Agent|Task"
     hook:
-      source: hooks/kb-gate.sh
-      destination: kb-gate.sh
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
     doctorChecks:
       - type: hookEventExists
         name: "PreToolUse hook registered"
@@ -315,11 +323,12 @@ components:
   - id: hook-kb-subagent-brief
     displayName: Sub-agent KB brief
     description: Tells discovery sub-agents that the KB exists, so they search it instead of sweeping files
-    dependencies: [jq]
+    dependencies: [hook-helpers]
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: SubagentStart
     hook:
-      source: hooks/kb-gate.sh
-      destination: kb-gate.sh
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
     doctorChecks:
       - type: hookEventExists
         name: "SubagentStart hook registered"
@@ -350,6 +359,11 @@ ignore:
   - SYNC-BLOCKS.md
   - assets/
   - tests/
+  - scripts/
+  - .github/
+  - package.json
+  - package-lock.json
+  - tsconfig.json
 
 # ---------------------------------------------------------------------------
 # Templates — CLAUDE.local.md sections

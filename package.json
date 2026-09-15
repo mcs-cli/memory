@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.6" },
+  "scripts": {
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/*.test.mts",
+    "typecheck": "tsc --noEmit",
+    "check:sync": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-sync-blocks.mts"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0",
+    "typescript": "5.9.2"
+  }
+}

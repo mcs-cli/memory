@@ -2,9 +2,9 @@
 
 This file is **not loaded by any skill**. It is the canonical source for content that must remain verbatim-identical across `skills/continuous-learning/SKILL.md` and `skills/memory-audit/SKILL.md`.
 
-When you edit one of the blocks below, update this file first, then copy the new text into every listed location. The full drift-check script (with non-empty assertion and three-way comparison) is at the bottom of this file; CI runs the same logic.
+When you edit one of the blocks below, update this file first, then copy the new text into every listed location. Run `npm run check:sync` for the non-empty assertion and three-way comparison; CI runs the same command.
 
-> **Heads up for editors.** Anywhere outside the canonical fenced blocks below, refer to fences using the placeholder form (the text `SYNC` followed by a colon and `<tag>` in angle brackets, inside an HTML comment) — never with a real tag name like the three this file owns. The drift check's `awk` range grabs the first matching opener, so a literal real tag in prose would shadow the real block and make the canonical text invisible to the verifier.
+> **Heads up for editors.** Anywhere outside the canonical fenced blocks below, refer to fences using the placeholder form (the text `SYNC` followed by a colon and `<tag>` in angle brackets, inside an HTML comment) — never with a real tag name like the three this file owns. The drift check grabs the first matching opener, so a literal real tag in prose would shadow the real block and make the canonical text invisible to the verifier.
 
 The locked blocks are written in neutral voice — they describe what qualifies as a memory, not what to do with one. Each skill prepends/appends its own one-line framing **outside** the SYNC fences (capture says "do not save"; audit says "recommend DROP"). Do not move action verbs inside the locked block.
 
@@ -62,38 +62,7 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 ## Drift verification (CI-ready)
 
 ```sh
-#!/usr/bin/env bash
-set -uo pipefail
-A=skills/continuous-learning/SKILL.md
-B=skills/memory-audit/SKILL.md
-C=SYNC-BLOCKS.md
-overall=0
-for tag in capture-rules strip-the-anchors applies-to; do
-  echo "=== $tag ==="
-  tag_fail=0
-  for f in "$A" "$B" "$C"; do
-    if [ -z "$(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$f")" ]; then
-      echo "MISSING: block '$tag' not found in $f"
-      tag_fail=1
-    fi
-  done
-  if [ "$tag_fail" -eq 0 ]; then
-    for ref in "$B" "$C"; do
-      if ! diff -u --label "$A" --label "$ref" \
-          <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$A") \
-          <(awk "/<!-- SYNC:${tag} -->/,/<!-- \\/SYNC -->/" "$ref"); then
-        echo "DRIFT between $A and $ref for tag '$tag'"
-        tag_fail=1
-      fi
-    done
-  fi
-  if [ "$tag_fail" -eq 0 ]; then
-    echo "OK: identical across all three files"
-  else
-    overall=1
-  fi
-done
-exit "$overall"
+npm run check:sync
 ```
 
-The script enforces three things: every block exists in every source file (catches deleted or misspelled fences), the two skill files agree, and `SYNC-BLOCKS.md` itself agrees with them (catches "edited skills, forgot to update the maintainer reference"). CI runs the same script.
+The script enforces three things: every block exists in every source file (catches deleted or misspelled fences), the two skill files agree, and `SYNC-BLOCKS.md` itself agrees with them (catches "edited skills, forgot to update the maintainer reference"). The implementation is `scripts/check-sync-blocks.mts`; CI runs the same command.
