@@ -225,15 +225,13 @@ components:
       destination: shared.mts
 
   - id: hook-continuous-learning
-    displayName: Continuous learning activator
-    dependencies: [node]
+    displayName: Memory loop activator
     description: Reminds to evaluate learnings on each prompt
     isRequired: true
-    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: UserPromptSubmit
     hook:
-      source: hooks/continuous-learning-activator.mts
-      destination: continuous-learning-activator.mts
+      source: hooks/memory-loop-activator.sh
+      destination: memory-loop-activator.sh
 
   - id: hook-sync-memories
     displayName: Sync memories hook

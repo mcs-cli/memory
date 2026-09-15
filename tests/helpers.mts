@@ -19,7 +19,8 @@ export function fixture(t: TestContext) {
   delete env.GIT_DIR;
   delete env.GIT_WORK_TREE;
   const run = (script: string, payload: unknown = {}, overrides: NodeJS.ProcessEnv = {}, cwd = project) => {
-    const result = spawnSync(process.execPath, [...flags, script], {
+    const shell = script.endsWith(".sh");
+    const result = spawnSync(shell ? "/bin/bash" : process.execPath, shell ? [script] : [...flags, script], {
       cwd, env: { ...env, ...overrides }, input: typeof payload === "string" ? payload : JSON.stringify(payload), encoding: "utf8",
     });
     assert.equal(result.status, 0, result.stderr);

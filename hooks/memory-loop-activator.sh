@@ -1,5 +1,7 @@
-#!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
-process.stdout.write(`MANDATORY MEMORY PROTOCOL
+#!/bin/bash
+
+cat << 'EOF'
+MANDATORY MEMORY PROTOCOL
 
 If this starts a new sub-task or phase (tests, refactor, deploy, etc.)
 → search the KB via mcp__memory-loop__query for relevant patterns first.
@@ -15,4 +17,4 @@ documentation). Do not ask permission.
 
 Do NOT Write to .claude/memories/ directly. Always go through the skill
 so the routing and quality gates run.
-`);
+EOF

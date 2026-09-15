@@ -116,7 +116,7 @@ To change the mode, run `mcs sync` again. The selection is baked into the instal
 | **continuous-learning** (skill) | Extracts learnings and decisions from a session into structured memory files |
 | **memory-audit** (skill) | Reviews existing memories and flags stale or duplicate entries |
 | **sync-memories.mts** (hook) | Indexes memories at session start and re-indexes them when they change |
-| **continuous-learning-activator.mts** (hook) | Reminds Claude to check for knowledge worth capturing after each prompt |
+| **memory-loop-activator.sh** (hook) | Reminds Claude to check for knowledge worth capturing after each prompt |
 | **kb-gate.mts** (hook) | Keeps knowledge-base lookup ahead of delegated discovery work |
 | `autoMemoryEnabled: false` (setting) | Disables Claude Code's built-in memory in favor of this system |
 
@@ -153,7 +153,7 @@ memory/
 ├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
 │   ├── sync-memories.mts                 # Memory indexing/reindexing
-│   ├── continuous-learning-activator.mts # Knowledge extraction reminder
+│   ├── memory-loop-activator.sh         # Knowledge extraction reminder
 │   ├── kb-gate.mts                       # Keeps KB lookups ahead of delegated discovery
 │   └── shared.mts                       # Shared filesystem and project-path helpers
 ├── scripts/                            # Maintainer checks
@@ -167,7 +167,7 @@ memory/
 
 ## Development
 
-The hooks are `.mts` modules run with `node --experimental-strip-types --disable-warning=ExperimentalWarning`. There is no build step and no runtime npm dependency. MCS installs the shared library beside the hooks as `hooks/memory/shared.mts`, for both global and project installs. The small install, MCP launch, and doctor commands stay inline in the manifest as shell scripts.
+The gate and indexing hooks are `.mts` modules run with `node --experimental-strip-types --disable-warning=ExperimentalWarning`. There is no build step and no runtime npm dependency. MCS installs the shared library beside the hooks as `hooks/memory/shared.mts`, for both global and project installs. The static `memory-loop-activator.sh` reminder stays in shell to avoid starting Node on every prompt just to print text. The small install, MCP launch, and doctor commands also stay in shell inside the manifest.
 
 ```sh
 npm ci

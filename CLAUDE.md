@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-An MCS **tech pack** — a manifest plus TypeScript hooks, skills, and markdown templates that `mcs sync` copies into a user's `~/.claude` (global) or a project's `.claude`. There is no application, no build step, and no linter.
+An MCS **tech pack** — a manifest plus hooks, skills, and markdown templates that `mcs sync` copies into a user's `~/.claude` (global) or a project's `.claude`. There is no application, no build step, and no linter.
 
 The consequence that matters most: **nothing here executes from the repo.** Editing `hooks/kb-gate.mts` changes no behavior until `mcs sync` reinstalls it. When debugging, be explicit about whether you are looking at this repo's copy or the installed one, which lands in `~/.claude/hooks/` and `~/.claude/skills/` for a global sync, or the project's `.claude/` for a scoped one.
 
@@ -23,7 +23,7 @@ The consequence that matters most: **nothing here executes from the repo.** Edit
 
 **Run the suite twice when touching state handling** — CI does (`.github/workflows/ci.yml`). The gate's barrier is scoped by a monotonic turn counter rather than wall-clock time.
 
-Node 22.6+ runs `.mts` files directly with `--experimental-strip-types --disable-warning=ExperimentalWarning`. `.mts` keeps the module format independent of the target project's `package.json`. Development dependencies are only for typechecking; hooks import Node built-ins and `hooks/shared.mts`. MCS installs that library as `hooks/memory/shared.mts` beside the entry points.
+Node 22.6+ runs `.mts` files directly with `--experimental-strip-types --disable-warning=ExperimentalWarning`. `.mts` keeps the module format independent of the target project's `package.json`. Development dependencies are only for typechecking; hooks import Node built-ins and `hooks/shared.mts`. MCS installs that library as `hooks/memory/shared.mts` beside the entry points. `hooks/memory-loop-activator.sh` stays in shell because it only prints a static reminder on every prompt; its output is covered by the same contract fixtures.
 
 Two harness details are load-bearing rather than incidental:
 

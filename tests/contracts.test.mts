@@ -15,7 +15,7 @@ test("hook messages match the original shell output byte for byte", t => {
     assert.equal(f.event("SubagentStart", { agent_type: "Explore" }), `${JSON.stringify(messages.brief)}\n`);
   }
   const f = fixture(t);
-  assert.equal(f.run(`${root}/hooks/continuous-learning-activator.mts`), messages.activator);
+  assert.equal(f.run(`${root}/hooks/memory-loop-activator.sh`), messages.activator);
 });
 
 for (const type of ["commonjs", "module"]) {
@@ -32,9 +32,11 @@ for (const type of ["commonjs", "module"]) {
       const source = component.match(/source: (\S+)/)![1]!;
       const destination = component.match(/destination: (\S+)/)![1]!;
       const event = component.match(/hookEvent: (\S+)/)![1]!;
-      assert.match(component, /hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning/);
+      if (destination === "memory-loop-activator.sh") assert.doesNotMatch(component, /hookInterpreter:/);
+      else assert.match(component, /hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning/);
       writeFileSync(`${installed}/${destination}`, readFileSync(`${root}/${source}`, "utf8").replace("__KB_GATE_MODE__", "enforce"));
-      const output = f.run(`${installed}/${destination}`, { hook_event_name: event, session_id: "install", agent_type: "Explore", tool_input: { subagent_type: "Explore", query: "topic", prompt: "KB context: none relevant." } }, { PATH: f.work });
+      const output = f.run(`${installed}/${destination}`, { hook_event_name: event, session_id: "install", agent_type: "Explore", tool_input: { subagent_type: "Explore", query: "topic", prompt: "KB context: none relevant." } }, { PATH: `${f.work}:/usr/bin:/bin` });
+      if (destination === "memory-loop-activator.sh") assert.equal(output, messages.activator);
       if (event === "SubagentStart") assert.equal(JSON.parse(output).hookSpecificOutput.hookEventName, event);
     }
     assert.match(manifest, /hookMatcher: "Agent\|Task"/);
@@ -59,6 +61,7 @@ test("the SYNC verifier catches missing and divergent blocks", t => {
   assert.equal(spawnSync(process.execPath, [...flags, script]).status, 1);
 });
 
-test("hooks and tests have no shell files", () => {
-  for (const directory of ["hooks", "tests"]) assert.equal(readdirSync(`${root}/${directory}`).some(file => file.endsWith(".sh")), false);
+test("only the static activator remains a shell script", () => {
+  assert.deepEqual(readdirSync(`${root}/hooks`).filter(file => file.endsWith(".sh")), ["memory-loop-activator.sh"]);
+  assert.equal(readdirSync(`${root}/tests`).some(file => file.endsWith(".sh")), false);
 });
