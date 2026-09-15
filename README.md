@@ -178,7 +178,7 @@ npm run check:sync
 mcs pack validate
 ```
 
-Tests run in temporary projects outside the checkout and stub qmd, so they need no model download. CI checks Node 22.6, current 22 and 24, and the latest Node release on macOS, plus Node 22 on Linux.
+Tests run in temporary projects outside the checkout and stub qmd, so they need no model download. CI runs only for pull requests targeting `main`, checking Node 22.6, current 22 and 24, and the latest Node release on macOS.
 
 After editing, run `mcs sync` in the target project (or `mcs sync --global`) to install the new files and hook commands. This also removes the old managed shell hooks. Existing indexes and gate state use the same paths and formats.
 
