@@ -34,7 +34,7 @@ mcs sync --global                 # 3. install globally (~/.claude)
 mcs doctor                        # 4. verify everything is healthy
 ```
 
-**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22 or newer (qmd's runtime requirement — `mcs doctor` reports it if your `node` is older). `mcs` installs the remaining dependencies (`gh`, `jq`, and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
+**Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22 or newer (qmd's runtime requirement — `mcs doctor` reports it if your `node` is older). `mcs` installs the remaining dependencies (`jq` and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
 
 Global installation is recommended because the pack has no per-project configuration. Install it once and memory becomes available in every project. To scope it to a single repository instead, run `mcs sync` from inside that repository.
 
