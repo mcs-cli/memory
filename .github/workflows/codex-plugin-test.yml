@@ -1,0 +1,28 @@
+name: codex-plugin-test
+on:
+  pull_request:
+    paths: ['src/**', 'plugins/**', 'tests/**', 'package*.json', 'tsconfig.json', 'techpack.yaml', 'SYNC-BLOCKS.md', '.agents/**', '.github/workflows/codex-plugin-test.yml']
+  push:
+    branches: [main]
+    paths: ['src/**', 'plugins/**', 'tests/**', 'package*.json', 'tsconfig.json', 'techpack.yaml', 'SYNC-BLOCKS.md', '.agents/**']
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Bundled JavaScript is current
+        run: git diff --exit-code -- plugins/memory-loop/runtime/codex.cjs
+      - run: npm test
+      - run: bash tests/sync-memories-test.sh
+      - run: MEMORY_LOOP_HOST=codex bash tests/sync-memories-test.sh

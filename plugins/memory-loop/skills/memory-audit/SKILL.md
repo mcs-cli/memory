@@ -10,13 +10,17 @@ allowed-tools: Read, Glob, Grep, Edit, Bash, Write, mcp__memory-loop__query, mcp
 
 # Memory Audit Skill
 
-Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` refers to the current working directory. **DROP is not a failure** — deleting a memory that does not qualify (or that belongs in `CLAUDE.local.md`, in a planning doc, or in the tool's own docs) is the audit doing its job.
+Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` refers to the repository root (or session directory outside git). **DROP is not a failure** — deleting a memory that does not qualify (or that belongs in the host’s local project instructions, in a planning doc, or in the tool's own docs) is the audit doing its job.
 
 Over time, memory files accumulate — some become stale, some duplicate each other, some capture generic knowledge that doesn't belong in a project-specific KB. This skill walks through every memory with the user, recommending **KEEP**, **DROP**, or **UPDATE** with clear rationale, and only acts on user-approved changes.
 
 > **This skill is user-initiated only.** Never run it automatically or as part of another workflow.
 
 ---
+
+## Host adaptation
+
+Use the host’s available file, shell, search, and user-question tools for the operations below. Tool names such as `Write`, `Glob`, and `AskUserQuestion` describe operations; Claude permission metadata is retained in the frontmatter. Local project instructions means `CLAUDE.local.md` in Claude, or a user-maintained `AGENTS.md` in Codex. Suggest drafts there; never modify those instructions automatically. `<project>` is the git repository root, falling back to the session working directory outside git. In Codex, use the Memory Loop plugin’s `query`, `get`, and `multi_get` tools when their namespace differs from the examples.
 
 ## Capture Rules
 
@@ -62,7 +66,7 @@ Evaluate each memory against the criteria below, grouped into three:
 - Apply the strip-the-anchors test:
 
 <!-- SYNC:strip-the-anchors -->
-**Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in `CLAUDE.local.md`. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
+**Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in the host’s local project instructions. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
 <!-- /SYNC -->
 
 If the test fails, recommend DROP — or UPDATE only if a rewrite around the actual project anchor produces something genuinely project-specific.
@@ -150,9 +154,9 @@ The categories below are the recurring concrete shapes of B.1 (forcing-function)
 - Cross-platform audits, competitor analyses, tool surveys, "options considered for feature X (deferred)." Useful when the work resumes — but they belong in a planning doc or `docs/`, not the memory KB. The KB is for things that change *how a session would work on the active codebase today*.
 - Keep only if the audit findings are referenced by *currently active* decisions.
 
-### G. One-line preferences belonging in CLAUDE.md
-- A single-sentence rule with no Context / Options / Consequences. If it fits in one line of CLAUDE.md and applies project-wide, that's where it goes. A standalone memory file is overhead.
-- Test: would the memory's content be a single bullet under "Conventions" in CLAUDE.md? Then DROP and (if not already there) suggest moving it.
+### G. One-line preferences belonging in project instructions
+- A single-sentence rule with no Context / Options / Consequences. If it fits in one line of project instructions and applies project-wide, that's where it goes. A standalone memory file is overhead.
+- Test: would the memory's content be a single bullet under "Conventions" in project instructions? Then DROP and (if not already there) suggest moving it.
 
 ### H. Tiny / narrow learnings whose scope is fully covered by a sibling memory
 - A 30-line learning that captures one facet of a 200-line learning next to it. Cross-reference and DROP the smaller one, or merge.
@@ -261,7 +265,7 @@ Knowledge base reduced from 42 → 34 files.
 - **Never delete or edit without explicit per-batch approval.** Print the verdict table, then stop. Do not run any tool until the user replies for *this* batch — silence is not consent, and approval of an earlier batch does not carry forward.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
 - **Apply criteria with teeth, not deference.** Past audits drifted into KEEP-by-default because each memory had *some* tie to the project. The forcing-function test (B.1) is the correction: KEEP requires identifying behavior the memory drives, not just absence of error. When the DROP categories above match, call DROP — don't soften it to UPDATE or stash in KEEP "to be safe."
-- **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job. This is about doubt over a memory's *value*. Doubt over a *fact you could not check* is different — an unverified claim is a reason to ask, not to delete.
+- **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to the host’s local project instructions, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job. This is about doubt over a memory's *value*. Doubt over a *fact you could not check* is different — an unverified claim is a reason to ask, not to delete.
 - **Watch for the "but it's true and project-specific" trap.** That sentence is A.1 and C.4 passing — it says nothing about B.1. Two-pass thinking: first verify, then ask "does this change behavior?"
 - **Batch size matters.** 10-15 per batch keeps the review manageable.
 - **End-of-audit check for broken cross-links.** After DROPs land, grep `Related:` / `References:` lines for any pointer to a deleted filename and clean those up — broken refs accumulate silently otherwise.

@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "memory-loop": {
+      "command": "node",
+      "args": [
+        "-e",
+        "const fs=require('node:fs'),path=require('node:path'),os=require('node:os');\ntry {\n const home=process.env.CODEX_HOME||path.join(os.homedir(),'.codex');\n const binding=JSON.parse(fs.readFileSync(path.join(home,'memory-loop/runtime.json'),'utf8'));\n const entry=path.join(binding.bundle,'runtime/codex.cjs');\n process.argv.splice(1,0,entry);\n require(entry);\n} catch(e) { console.error('Memory Loop setup required: '+e.message); process.exitCode=1; }",
+        "qmd-mcp"
+      ],
+      "env_vars": [
+        "CODEX_HOME",
+        "XDG_CACHE_HOME"
+      ]
+    },
+    "memory-brief": {
+      "command": "node",
+      "args": [
+        "-e",
+        "const fs=require('node:fs'),path=require('node:path'),os=require('node:os');\ntry {\n const home=process.env.CODEX_HOME||path.join(os.homedir(),'.codex');\n const binding=JSON.parse(fs.readFileSync(path.join(home,'memory-loop/runtime.json'),'utf8'));\n const entry=path.join(binding.bundle,'runtime/codex.cjs');\n process.argv.splice(1,0,entry);\n require(entry);\n} catch(e) { console.error('Memory Loop setup required: '+e.message); process.exitCode=1; }",
+        "brief-mcp"
+      ],
+      "env_vars": [
+        "CODEX_HOME",
+        "XDG_CACHE_HOME"
+      ]
+    }
+  }
+}

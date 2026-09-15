@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tests for hooks/sync-memories.sh.
+# Tests for plugins/memory-loop/runtime/sync-memories.sh.
 #
 # qmd is stubbed on PATH, so the suite asserts what the hook decides to do rather
 # than what qmd does with it — no model, no index, fast in CI.
@@ -18,7 +18,9 @@
 set -uo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
-src="$repo_root/hooks/sync-memories.sh"
+src="${SYNC_SOURCE:-$repo_root/plugins/memory-loop/runtime/sync-memories.sh}"
+index_rel=".claude/.kb-index"
+[ "${MEMORY_LOOP_HOST:-claude}" = codex ] && index_rel=".codex/.memory-loop/index"
 [ -f "$src" ] || {
     echo "FATAL: $src not found"
     exit 1
@@ -48,8 +50,12 @@ group() { printf '\n== %s\n' "$1"; }
 
 stub="$work/bin"
 mkdir -p "$stub"
+export XDG_CACHE_HOME="$work/cache"
+mkdir -p "$XDG_CACHE_HOME/qmd/models"
+: >"$XDG_CACHE_HOME/qmd/models/hf_Qwen_Qwen3-Embedding-0.6B-Q8_0.gguf"
 cat >"$stub/qmd" <<'STUB'
 #!/bin/bash
+[ "${1:-}" = --version ] && { echo 'qmd 2.8.3'; exit 0; }
 printf '%s\n' "$*" >>"$STUB_LOG"
 case " $* " in
 *" update "*)
@@ -64,6 +70,9 @@ case " $* " in
     echo "All content hashes already have embeddings."
     ;;
 *" status "*)
+    [ "${STUB_MODE:-ok}" = status_fails ] && { echo 'status exploded' >&2; exit 1; }
+    [ "${STUB_MODE:-ok}" = status_empty ] && exit 0
+    [ "${STUB_MODE:-ok}" = status_unknown ] && { echo 'Unknown status format'; exit 0; }
     echo "  Total:    2 files indexed"
     [ "${STUB_MODE:-ok}" = pending ] &&
         echo "  Pending:  3 need embedding (run 'qmd embed')"
@@ -162,34 +171,78 @@ assert_contains "second run still calls embed" "$(stub_log)" "embed"
 
 group "config records the literal path, not the symlink target"
 assert_contains "collection path is the symlink" \
-    "$(cat "$link/.claude/.kb-index/memory-loop.yml")" "$link/.claude/memories"
+    "$(cat "$link/$index_rel/memory-loop.yml")" "$link/.claude/memories"
 
 group "no memories directory is a no-op"
 run "$nomem"
 assert_silent "qmd is never called" "$(stub_log)"
-assert_missing "no index directory is populated" "$nomem/.claude/.kb-index/memory-loop.sqlite"
+assert_missing "no index directory is populated" "$nomem/$index_rel/memory-loop.sqlite"
 
 group "failures leave the reason on disk"
 run "$plain" update_fails
-assert_exists "a failed update keeps the log" "$plain/.claude/.kb-index/memory-loop.log"
+assert_exists "a failed update keeps the log" "$plain/$index_rel/memory-loop.log"
 assert_not_contains "and stops before cleanup" "$(stub_log)" "cleanup"
 
 run "$plain" pending
 assert_contains "unembedded documents keep the log" \
-    "$(cat "$plain/.claude/.kb-index/memory-loop.log")" "still need embedding"
+    "$(cat "$plain/$index_rel/memory-loop.log")" "still need embedding"
 assert_not_contains "and stops before cleanup" "$(stub_log)" "cleanup"
 
 group "a clean run leaves nothing behind"
 run "$plain"
-assert_missing "the failure log is cleared" "$plain/.claude/.kb-index/memory-loop.log"
-assert_missing "the lock is released" "$plain/.claude/.kb-index/.reindex.lock"
+assert_missing "the failure log is cleared" "$plain/$index_rel/memory-loop.log"
+assert_missing "the lock is released" "$plain/$index_rel/.reindex.lock"
 assert_contains "orphaned chunks are cleaned up" "$(stub_log)" "cleanup"
 
 # Housekeeping must never turn into an indexing failure.
 run "$plain" cleanup_fails
-assert_missing "a failed cleanup writes no failure log" "$plain/.claude/.kb-index/memory-loop.log"
+assert_missing "a failed cleanup writes no failure log" "$plain/$index_rel/memory-loop.log"
 [ "$last_exit" -eq 0 ] && ok "a failed cleanup still exits 0" ||
     bad "a failed cleanup still exits 0" "hook exited $last_exit"
+
+group "failed or unrecognized status never reports healthy"
+for mode in status_fails status_empty status_unknown; do
+    run "$plain" "$mode"
+    assert_exists "$mode retains diagnostics" "$plain/$index_rel/memory-loop.log"
+    assert_not_contains "$mode skips cleanup" "$(stub_log)" "cleanup"
+done
+
+group "configuration publication is safe under overlap"
+# Block cmp until all writers reach it. The old shared .new file then gets
+# renamed out from under other writers; unique temporary files all survive.
+real_cmp=$(command -v cmp)
+real_mv=$(command -v mv)
+rm "$nomem/$index_rel/memory-loop.yml"
+cat >"$stub/cmp" <<'CMP'
+#!/bin/bash
+: >"$RACE_BARRIER/$$"
+leader=false
+mkdir "$RACE_BARRIER/leader" 2>/dev/null && leader=true
+while [ "$(find "$RACE_BARRIER" -type f | wc -l | tr -d ' ')" -lt 8 ]; do sleep 0.02; done
+if [ "$leader" = false ]; then
+    while [ ! -f "$RACE_RELEASE" ]; do sleep 0.02; done
+fi
+[ -f "$2" ] || { echo missing >>"$RACE_ERRORS"; }
+exec "$REAL_CMP" "$@"
+CMP
+cat >"$stub/mv" <<'MV'
+#!/bin/bash
+"$REAL_MV" "$@"
+result=$?
+: >"$RACE_RELEASE"
+exit "$result"
+MV
+chmod +x "$stub/cmp" "$stub/mv"
+mkdir -p "$work/barrier"
+for i in 1 2 3 4 5 6 7 8; do
+    (cd "$nomem" && printf '{}' | env PATH="$stub:$PATH" REAL_CMP="$real_cmp" \
+       RACE_BARRIER="$work/barrier" RACE_ERRORS="$work/race-errors" REAL_MV="$real_mv" RACE_RELEASE="$work/released" \
+       bash "$src" --configure-only) &
+done
+wait
+assert_missing "every writer owns its temporary config" "$work/race-errors"
+assert_exists "complete config is published" "$nomem/$index_rel/memory-loop.yml"
+rm "$stub/cmp" "$stub/mv"
 
 # ==========================================================================
 

@@ -1,6 +1,6 @@
 # Sync Blocks (maintainer-only)
 
-This file is **not loaded by any skill**. It is the canonical source for content that must remain verbatim-identical across `skills/continuous-learning/SKILL.md` and `skills/memory-audit/SKILL.md`.
+This file is **not loaded by any skill**. It is the canonical source for content that must remain verbatim-identical across `plugins/memory-loop/skills/continuous-learning/SKILL.md` and `plugins/memory-loop/skills/memory-audit/SKILL.md`.
 
 When you edit one of the blocks below, update this file first, then copy the new text into every listed location. The full drift-check script (with non-empty assertion and three-way comparison) is at the bottom of this file; CI runs the same logic.
 
@@ -13,8 +13,8 @@ The locked blocks are written in neutral voice — they describe what qualifies 
 ## Block 1: Capture Rules
 
 Locations:
-- `skills/continuous-learning/SKILL.md` — `## Capture Rules`
-- `skills/memory-audit/SKILL.md` — `## Capture Rules`
+- `plugins/memory-loop/skills/continuous-learning/SKILL.md` — `## Capture Rules`
+- `plugins/memory-loop/skills/memory-audit/SKILL.md` — `## Capture Rules`
 
 ```markdown
 <!-- SYNC:capture-rules -->
@@ -32,12 +32,12 @@ Every memory must satisfy all three rules.
 ## Block 2: Strip-the-anchors test
 
 Locations:
-- `skills/continuous-learning/SKILL.md` — inside Step 4 (pre-save Check 1)
-- `skills/memory-audit/SKILL.md` — inside criterion 1
+- `plugins/memory-loop/skills/continuous-learning/SKILL.md` — inside Step 4 (pre-save Check 1)
+- `plugins/memory-loop/skills/memory-audit/SKILL.md` — inside criterion 1
 
 ```markdown
 <!-- SYNC:strip-the-anchors -->
-**Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in `CLAUDE.local.md`. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
+**Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in the host’s local project instructions. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
 <!-- /SYNC -->
 ```
 
@@ -46,8 +46,8 @@ Locations:
 ## Block 3: `Applies to:` semantics
 
 Locations:
-- `skills/continuous-learning/SKILL.md` — inside Step 4 (`### Applies to` subsection)
-- `skills/memory-audit/SKILL.md` — inside the `Applies to:` callout near the top
+- `plugins/memory-loop/skills/continuous-learning/SKILL.md` — inside Step 4 (`### Applies to` subsection)
+- `plugins/memory-loop/skills/memory-audit/SKILL.md` — inside the `Applies to:` callout near the top
 
 ```markdown
 <!-- SYNC:applies-to -->
@@ -64,8 +64,8 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 ```sh
 #!/usr/bin/env bash
 set -uo pipefail
-A=skills/continuous-learning/SKILL.md
-B=skills/memory-audit/SKILL.md
+A=plugins/memory-loop/skills/continuous-learning/SKILL.md
+B=plugins/memory-loop/skills/memory-audit/SKILL.md
 C=SYNC-BLOCKS.md
 overall=0
 for tag in capture-rules strip-the-anchors applies-to; do

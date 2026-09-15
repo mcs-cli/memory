@@ -1,0 +1,22 @@
+{
+  "name": "memory-loop",
+  "version": "0.1.0",
+  "description": "Persistent project memory with local retrieval, automatic capture, and shared delegation briefs.",
+  "author": {
+    "name": "Bruno Guidolim"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Memory Loop",
+    "shortDescription": "Project knowledge that outlives the session.",
+    "longDescription": "Share project memories with Claude Code and Codex. Local qmd search, quality-controlled capture, user-invoked audits, and prepared context for delegated work.",
+    "developerName": "Bruno Guidolim",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Set up Memory Loop for Codex."
+    ]
+  },
+  "mcpServers": "./.mcp.json",
+  "repository": "https://github.com/mcs-cli/memory"
+}

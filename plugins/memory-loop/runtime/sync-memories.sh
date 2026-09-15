@@ -28,6 +28,9 @@ project_root=$(git rev-parse --show-toplevel 2>/dev/null)
 
 MEMORIES_DIR="$project_root/.claude/memories"
 INDEX_DIR="$project_root/.claude/.kb-index"
+if [ "${MEMORY_LOOP_HOST:-claude}" = codex ]; then
+    INDEX_DIR="$project_root/.codex/.memory-loop/index"
+fi
 CONFIG="$INDEX_DIR/memory-loop.yml"
 
 # One model fills all three of qmd's slots. Embed is the only one that does real
@@ -39,8 +42,24 @@ CONFIG="$INDEX_DIR/memory-loop.yml"
 # the fallback: MRR 0.792 against 0.800 for an explicit rerank:false.
 EMBED_MODEL="hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf"
 
-# Exit early if qmd is not installed
-command -v qmd >/dev/null 2>&1 || exit 0
+# Codex invokes --configure-only before launching MCP; publishing config needs
+# no qmd executable. Ordinary runs never install dependencies.
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+if [ "${1:-}" != --configure-only ] && ! command -v qmd >/dev/null 2>&1; then
+    if [ "${MEMORY_LOOP_HOST:-claude}" = codex ]; then
+        mkdir -p "$INDEX_DIR" 2>/dev/null
+        echo "Missing setup: qmd unavailable. Run Memory Loop setup." >"$INDEX_DIR/memory-loop.log"
+    fi
+    exit 0
+fi
+if [ "${1:-}" != --configure-only ] && [ "${MEMORY_LOOP_HOST:-claude}" = codex ]; then
+    model_file="${XDG_CACHE_HOME:-$HOME/.cache}/qmd/models/hf_Qwen_Qwen3-Embedding-0.6B-Q8_0.gguf"
+    if ! qmd --version 2>/dev/null | grep -qE '^qmd 2\.8\.3( |$)' || [ ! -f "$model_file" ]; then
+        mkdir -p "$INDEX_DIR" 2>/dev/null
+        echo "Missing setup: qmd 2.8.3 and the shared Qwen3 model are required. Run Memory Loop setup." >"$INDEX_DIR/memory-loop.log"
+        exit 0
+    fi
+fi
 
 # --- Index configuration ---
 # A named index (`--index`) rather than a project-local .qmd/ directory, for two
@@ -69,11 +88,13 @@ mkdir -p "$INDEX_DIR" 2>/dev/null || exit 0
 # Single-quoted YAML scalar with internal quotes doubled: a project path may
 # legitimately contain "#" or ": ", either of which silently changes what the
 # parser sees when written bare.
-mem_yaml="'${MEMORIES_DIR//\'/\'\'}'"
+mem_yaml="'$(printf '%s' "$MEMORIES_DIR" | sed "s/'/''/g")'"
 
 # Unquoted heredoc — it has to interpolate the two variables below, so backticks
 # and $ in the context text are executed by the shell and vanish from the config.
-cat >"$CONFIG.new" <<EOF || exit 0
+config_tmp=$(mktemp "$CONFIG.XXXXXXXX") || exit 0
+trap 'rm -f "$config_tmp"' EXIT
+cat >"$config_tmp" <<EOF || exit 0
 collections:
   memories:
     path: $mem_yaml
@@ -97,10 +118,10 @@ EOF
 # mtime alone. Comparing whole files rather than probing for one line is what
 # lets any later edit here — the context text especially — reach an install that
 # already has a config.
-if ! cmp -s "$CONFIG.new" "$CONFIG" 2>/dev/null; then
-    mv -f "$CONFIG.new" "$CONFIG" || exit 0
+if ! cmp -s "$config_tmp" "$CONFIG" 2>/dev/null; then
+    mv -f "$config_tmp" "$CONFIG" || exit 0
 else
-    rm -f "$CONFIG.new"
+    rm -f "$config_tmp"
 fi
 
 # The config is written even when no memory has been captured yet, because the
@@ -109,6 +130,7 @@ fi
 # session, however promptly this hook indexes it. Registering the collection up
 # front costs nothing — qmd accepts a collection whose directory does not exist
 # and reports zero documents.
+[ "${1:-}" = --configure-only ] && exit 0
 [ -d "$MEMORIES_DIR" ] || exit 0
 
 # --- Reindex ---
@@ -126,7 +148,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
     rmdir "$LOCK" 2>/dev/null
     mkdir "$LOCK" 2>/dev/null || exit 0
 fi
-trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+trap 'rm -f "$config_tmp"; rmdir "$LOCK" 2>/dev/null' EXIT
 
 # Removed on success, so its presence is itself the signal that indexing is broken
 # and it holds the reason. A doctor check reports it. Lives beside the index, so
@@ -144,8 +166,22 @@ qmd --index memory-loop embed >>"$ERROR_LOG" 2>&1 || exit 0
 #
 # `status`, not `update`: `update`'s "needing vectors" count is computed without
 # the embed model, so it reports every hash as pending on a fully embedded index.
-pending=$(qmd --index memory-loop status 2>/dev/null |
-            sed -n 's/.*Pending: *\([0-9][0-9]*\).*/\1/p' | head -1)
+status=$(qmd --index memory-loop status 2>>"$ERROR_LOG") || {
+    printf '%s\n' 'qmd status failed; indexing health is unknown.' >>"$ERROR_LOG"
+    exit 0
+}
+# qmd omits Pending when healthy. Require its known Total summary before
+# interpreting that absence as zero; empty or unrecognized output is not health.
+if ! printf '%s\n' "$status" | grep -qE 'Total: *[0-9]+ files indexed'; then
+    printf '%s\n' 'Unrecognized qmd status; indexing health is unknown.' >>"$ERROR_LOG"
+    exit 0
+fi
+pending=$(printf '%s\n' "$status" |
+            sed -n 's/.*Pending: *\([0-9][0-9]*\) *need embedding.*/\1/p' | head -1)
+if printf '%s\n' "$status" | grep -q 'Pending:' && [ -z "$pending" ]; then
+    printf '%s\n' 'Unrecognized Pending count; indexing health is unknown.' >>"$ERROR_LOG"
+    exit 0
+fi
 if [ "${pending:-0}" -ne 0 ]; then
     printf '%s  %s documents still need embedding after this run.\n' \
         "$(date '+%Y-%m-%dT%H:%M:%S')" "$pending" >>"$ERROR_LOG"

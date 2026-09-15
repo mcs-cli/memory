@@ -3,15 +3,15 @@ name: sync-blocks
 on:
   pull_request:
     paths:
-      - "skills/continuous-learning/SKILL.md"
-      - "skills/memory-audit/SKILL.md"
+      - "plugins/memory-loop/skills/continuous-learning/SKILL.md"
+      - "plugins/memory-loop/skills/memory-audit/SKILL.md"
       - "SYNC-BLOCKS.md"
       - ".github/workflows/sync-blocks.yml"
   push:
     branches: [main]
     paths:
-      - "skills/continuous-learning/SKILL.md"
-      - "skills/memory-audit/SKILL.md"
+      - "plugins/memory-loop/skills/continuous-learning/SKILL.md"
+      - "plugins/memory-loop/skills/memory-audit/SKILL.md"
       - "SYNC-BLOCKS.md"
 
 permissions:
@@ -30,8 +30,8 @@ jobs:
       - name: Verify SYNC blocks exist and agree across both skills + SYNC-BLOCKS.md
         run: |
           set -uo pipefail
-          A=skills/continuous-learning/SKILL.md
-          B=skills/memory-audit/SKILL.md
+          A=plugins/memory-loop/skills/continuous-learning/SKILL.md
+          B=plugins/memory-loop/skills/memory-audit/SKILL.md
           C=SYNC-BLOCKS.md
           overall=0
           for tag in capture-rules strip-the-anchors applies-to; do

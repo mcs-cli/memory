@@ -3,7 +3,7 @@ name: continuous-learning
 description: >
   Evaluates reusable knowledge (debugging discoveries, architectural decisions, conventions)
   from work sessions and routes it to the correct destination:
-  .claude/memories/ for codebase knowledge, CLAUDE.local.md for environment/tool/instance
+  .claude/memories/ for codebase knowledge, local project instructions for environment/tool/instance
   config, or skip for public documentation. Also use when the user asks to "run a
   retrospective", "extract learnings", or "save what we learned" from the current session.
 allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__memory-loop__query, mcp__memory-loop__get
@@ -11,9 +11,13 @@ allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__memory-loop__query
 
 # Continuous Learning Skill
 
-Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a `CLAUDE.local.md` section, public documentation → skip. The skill is the **only** path to `memories/` — never `Write` there directly. Suggesting `CLAUDE.local.md` is a successful outcome, not a failure.
+Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a section for the host’s local project instructions, public documentation → skip. The skill is the **only** path to `memories/` — never `Write` there directly. Suggesting the host’s local project instructions is a successful outcome, not a failure.
 
-> **Note:** `<project>` refers to the current working directory (project root) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
+> **Note:** `<project>` refers to the repository root (or session directory outside git) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
+
+## Host adaptation
+
+Use the host’s available file, shell, search, and user-question tools for the operations below. Tool names such as `Write`, `Glob`, and `AskUserQuestion` describe operations; Claude permission metadata is retained in the frontmatter. Local project instructions means `CLAUDE.local.md` in Claude, or a user-maintained `AGENTS.md` in Codex. Suggest drafts there; never modify those instructions automatically. `<project>` is the git repository root, falling back to the session working directory outside git. In Codex, use the Memory Loop plugin’s `query`, `get`, and `multi_get` tools when their namespace differs from the examples.
 
 ## Memory Categories
 
@@ -160,7 +164,7 @@ Run both checks as visible output before any `Write` to `<project>/.claude/memor
 **Check 1: Strip-the-anchors (routing).**
 
 <!-- SYNC:strip-the-anchors -->
-**Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in `CLAUDE.local.md`. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
+**Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in the host’s local project instructions. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
 <!-- /SYNC -->
 
 Print, in two short lines, before the save:
@@ -168,13 +172,13 @@ Print, in two short lines, before the save:
 - **Anchors stripped:** comma-separated list of every project-specific reference identified above. If none → the draft has no project tie; reject the save.
 - **Substance without anchors:** one sentence describing what is left after stripping (e.g. *"the project's coordinator pattern between view-models and routing"*, *"how a third-party HTTP-debugging proxy's mock-rule syntax works"*).
 
-If the substance line describes general, tool, language, or environment knowledge, reject the `Write` to `memories/`. Emit the content as a draft `CLAUDE.local.md` section (heading `## <Tool/Service Name>`) and a one-line note: "this is environment/tool config — consider adding the section above to `CLAUDE.local.md`." Stop. Do not edit `CLAUDE.local.md`; the user decides.
+If the substance line describes general, tool, language, or environment knowledge, reject the `Write` to `memories/`. Emit the content as a draft section for the host’s local project instructions (heading `## <Tool/Service Name>`) and a one-line note: "this is environment/tool config — consider adding the section above to the host’s local project instructions." Stop. Do not edit the host’s local project instructions; the user decides.
 
 *Worked example.* Draft says "how to write a mock rule for an HTTP-debugging proxy returning 500 for `/checkout`."
 - Anchors stripped: `/checkout`.
 - Substance without anchors: "how the proxy's mock-rule syntax works."
 
-Substance is tool knowledge → reject the `memories/` save; emit as a `CLAUDE.local.md` draft section under the proxy's name.
+Substance is tool knowledge → reject the `memories/` save; emit as a draft section for the host’s local project instructions under the proxy's name.
 
 This shape forces the test to happen — you cannot list anchors without finding them, cannot describe the substance without evaluating it — without reprinting the full draft.
 
@@ -214,14 +218,14 @@ Anti-examples, generalized — do not create memories like these:
 | Category | Concrete anti-example | Why it fails |
 |----------|-----------------------|--------------|
 | Public tool / CLI reference | "`git rebase -i` opens an editor with a todo list" | **[Rule 1]** Public docs cover this verbatim — no project anchor. |
-| Internal / proprietary tool reference | "How to write a mock rule in `<company-internal-proxy>` to return 500 for endpoint X, plus where the rules JSON lives on disk" | **[Rule 1]** Tool mechanics — applies to any project using the tool. Sprinkling project endpoints into the example does not make it project knowledge. Belongs in the tool's own docs or `CLAUDE.local.md`. |
+| Internal / proprietary tool reference | "How to write a mock rule in `<company-internal-proxy>` to return 500 for endpoint X, plus where the rules JSON lives on disk" | **[Rule 1]** Tool mechanics — applies to any project using the tool. Sprinkling project endpoints into the example does not make it project knowledge. Belongs in the tool's own docs or the host’s local project instructions. |
 | Documented language / framework behavior | "`$status` is read-only in zsh" | **[Rule 1]** First hit in the language reference — no project anchor. |
 | Public API reference | "Public Git hosting API rate limit is N/hr authenticated" | **[Rule 1]** Public API docs cover this — no project-specific twist. |
 | Personal identifier | Problem section narrates a specific engineer hitting a cache bug | **[Rule 2]** Names an engineer. |
 | Personal preference without project evidence | "Prefer early returns" with no lint rule, consistent codebase usage, or team agreement | **[Rule 3]** Taste, not pattern. |
 | Historical record of a one-time shipped change | "We renamed folder `Install/` to `Sync/` after the command rename" | **[Forcing-function]** Once shipped, `git log` answers this. Future sessions read the current code, not the migration story. Assumes version control holds the history — without it nothing else records the change. |
 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance" with one PR cited | **[Rule 1]** Strip the example — what is left is universal advice that fits any project. Belongs in a coding-style doc, not a per-project KB. |
-| One-line rule that belongs in CLAUDE.md | A single-sentence convention with no Context / Options / Consequences | **[Scope]** If it fits in one bullet under "Conventions" in CLAUDE.md, put it there. A standalone memory file is overhead for content that cannot grow. |
+| One-line rule that belongs in project instructions | A single-sentence convention with no Context / Options / Consequences | **[Scope]** If it fits in one bullet under "Conventions" in project instructions, put it there. A standalone memory file is overhead for content that cannot grow. |
 | Naming/prefix decision once enforced | "We kept the `External` prefix on adapter types" | **[Forcing-function]** Once the type system, lint, or formatter enforces it, the decision lives in the code. Future sessions read the code, not the memory. |
 | One-time bug fix self-evident in current code | "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity" | **[Forcing-function]** The fix is a small diff; the code reads correctly today. Save only if the bug class is recurring and the memory teaches the *avoidance pattern*, not the one fix. |
 | Research artifact for deferred or dormant work | "Cross-platform audit / options-considered for feature X (deferred indefinitely)" | **[Forcing-function]** Useful when the work resumes — but it belongs in a planning doc or `docs/`, not the memory KB. The KB is for things that change how a session works on the active codebase today. |

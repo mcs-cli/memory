@@ -11,7 +11,7 @@
 
 </div>
 
-**The Memory Loop** gives Claude Code persistent, project-specific memory. It captures debugging discoveries, architectural decisions, and local conventions in a searchable knowledge base—then brings the right context back into future sessions. Instead of rediscovering the same lessons, Claude gets increasingly effective at working in *your* codebase.
+**The Memory Loop** gives Claude Code and Codex persistent, project-specific memory. It captures debugging discoveries, architectural decisions, and local conventions in a searchable knowledge base—then brings the right context back into future sessions. Instead of rediscovering the same lessons, Claude gets increasingly effective at working in *your* codebase.
 
 ```text
 identifier: memory
@@ -27,6 +27,19 @@ The project was formerly called **Memory**, and originally **Continuous Learning
 
 ## Install
 
+### Codex — standalone plugin
+
+```sh
+codex plugin marketplace add mcs-cli/memory
+codex plugin add memory-loop@memory-loop
+```
+
+In a new session, invoke **memory-loop-setup**, then review the plugin’s hooks in `/hooks`. No MCS installation is required. The plugin uses Node ≥22, global qmd 2.8.3, jq, and the same shared Qwen3 model as the techpack.
+
+[Setup, configuration, cleanup, and support details](plugins/memory-loop/README.md). macOS CLI is the verification target; desktop support is provisional. Codex uses a parent-curated shared brief before delegation; it does not inspect outgoing prompts or guarantee task-specific delivery.
+
+### Claude Code — MCS techpack
+
 ```bash
 brew install mcs-cli/tap/mcs      # 1. install mcs
 mcs pack add mcs-cli/memory       # 2. register this pack
@@ -36,7 +49,7 @@ mcs doctor                        # 4. verify everything is healthy
 
 **Prerequisites:** macOS, [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and Node.js 22 or newer (qmd's runtime requirement — `mcs doctor` reports it if your `node` is older). `mcs` installs the remaining dependencies (`jq` and [qmd](https://github.com/tobi/qmd)) automatically. The first sync also downloads a shared ~610 MB embedding model. Everything runs locally, with no daemon left running between sessions.
 
-Global installation is recommended because the pack has no per-project configuration. Install it once and memory becomes available in every project. To scope it to a single repository instead, run `mcs sync` from inside that repository.
+Global installation is recommended. The KB gate mode can be selected per project. Install it once and memory becomes available in every project. To scope it to a single repository instead, run `mcs sync` from inside that repository.
 
 ## How the loop works
 
@@ -149,17 +162,18 @@ The Memory Loop no longer installs or manages any of these components.
 
 ```text
 memory/
-├── techpack.yaml                        # Manifest — defines all components
-├── config/settings.json                 # Disables built-in auto-memory
-├── hooks/
-│   ├── sync-memories.sh                 # Memory indexing/reindexing
-│   ├── continuous-learning-activator.sh # Knowledge extraction reminder
-│   └── kb-gate.sh                       # Keeps KB lookups ahead of delegated discovery
-├── skills/
-│   ├── continuous-learning/             # Extraction rules + memory templates
-│   └── memory-audit/                    # Audit workflow (KEEP/DROP/UPDATE)
-└── templates/
-    └── continuous-learning.md           # "Search KB before any task"
+├── techpack.yaml                        # MCS IDs and installed destinations
+├── .agents/plugins/marketplace.json     # Git-installable Codex catalog
+├── plugins/memory-loop/                 # Self-contained plugin bundle
+│   ├── skills/                          # Shared capture/audit + Codex setup
+│   ├── runtime/sync-memories.sh          # Shared MCS/Codex indexer
+│   ├── runtime/codex.cjs                # Bundled Codex adapter
+│   ├── hooks/hooks.json                 # Codex hook registrations
+│   └── scripts/memory-loop              # One setup/runtime entry point
+├── src/codex/                           # TypeScript sources
+├── hooks/                               # Claude gate and capture reminder
+├── config/settings.json                 # Claude auto-memory setting
+└── templates/continuous-learning.md     # Claude startup policy
 ```
 
 ## Companion pack
@@ -182,3 +196,23 @@ memory/
 ## License
 
 MIT
+
+## Shared packaging and verification
+
+The canonical capture/audit skills and incremental indexing script live in `plugins/memory-loop/`. MCS installs those same sources at its existing destinations. Claude’s delegation hook and MCP launcher remain host-specific; Codex’s TypeScript adapter is bundled as JavaScript and needs no build at installation.
+
+Both integrations use `.claude/memories/`; Claude state stays under `.claude/`, Codex state under `.codex/.memory-loop/`. Existing symlinked collections are supported.
+
+```sh
+npm ci
+npm run build
+npm test
+bash tests/kb-gate-test.sh
+bash tests/sync-memories-test.sh
+MEMORY_LOOP_HOST=codex bash tests/sync-memories-test.sh
+# Explicit live checks (global qmd/model and authenticated Codex required):
+node tests/qmd-smoke.mjs
+node tests/codex-live.mjs
+```
+
+[Verification notes and policy scenarios](tests/VERIFICATION.md).

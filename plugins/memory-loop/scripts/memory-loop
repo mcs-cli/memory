@@ -1,0 +1,15 @@
+#!/bin/sh
+base=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+if ! command -v node >/dev/null 2>&1 || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' 2>/dev/null; then
+    install_requested=false
+    for arg in "$@"; do [ "$arg" = --install-deps ] && install_requested=true; done
+    if [ "${1:-}" = setup ] && [ "$install_requested" = true ]; then
+        if command -v node >/dev/null 2>&1; then brew upgrade node || exit 1; else brew install node || exit 1; fi
+    else
+        printf '%s\n' 'Memory Loop needs Node >=22. Run setup --install-deps or brew install node.' >&2
+        [ "${1:-}" = hook ] && exit 0
+        exit 1
+    fi
+fi
+exec node "$base/runtime/codex.cjs" "$@"

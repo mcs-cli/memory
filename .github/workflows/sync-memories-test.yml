@@ -3,13 +3,13 @@ name: sync-memories-test
 on:
   pull_request:
     paths:
-      - "hooks/sync-memories.sh"
+      - "plugins/memory-loop/runtime/sync-memories.sh"
       - "tests/sync-memories-test.sh"
       - ".github/workflows/sync-memories-test.yml"
   push:
     branches: [main]
     paths:
-      - "hooks/sync-memories.sh"
+      - "plugins/memory-loop/runtime/sync-memories.sh"
       - "tests/sync-memories-test.sh"
 
 permissions:

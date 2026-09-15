@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-An MCS **tech pack** — a manifest plus bash hooks, skills, and markdown templates that `mcs sync` copies into a user's `~/.claude` (global) or a project's `.claude`. There is no application, no build step, and no linter.
+An MCS **tech pack** — a manifest plus bash hooks, skills, and markdown templates that `mcs sync` copies into a user's `~/.claude` (global) or a project's `.claude`. Alongside it is a standalone Codex plugin. Its TypeScript adapter is built with `npm run build` into the committed `plugins/memory-loop/runtime/codex.cjs`; installation requires no build.
 
-The consequence that matters most: **nothing here executes from the repo.** Editing `hooks/kb-gate.sh` changes no behavior until `mcs sync` reinstalls it. When debugging, be explicit about whether you are looking at this repo's copy or the installed one, which lands in `~/.claude/hooks/` and `~/.claude/skills/` for a global sync, or the project's `.claude/` for a scoped one.
+The consequence that matters most: **MCS installs copies rather than executing these source files.** Editing `hooks/kb-gate.sh` changes no behavior until `mcs sync` reinstalls it. When debugging, be explicit about whether you are looking at this repo's copy or the installed one, which lands in `~/.claude/hooks/` and `~/.claude/skills/` for a global sync, or the project's `.claude/` for a scoped one.
 
 ## Commands
 
@@ -15,15 +15,15 @@ The consequence that matters most: **nothing here executes from the repo.** Edit
 | Run the KB gate suite | `bash tests/kb-gate-test.sh` |
 | Run the indexer suite | `bash tests/sync-memories-test.sh` (stubs qmd; no model needed) |
 | Verify the SYNC blocks agree | the snippet below (full version at the bottom of `SYNC-BLOCKS.md`) |
-| Check the manifest | `mcs pack validate` — validates structure and component references, not just YAML syntax. A raw parse needs a Python that has PyYAML, which is not guaranteed to be `/usr/bin/python3` |
+| Check the manifest | `mcs pack validate` — validates structure and component references, not just YAML syntax. Both skill sources and the shared indexer must resolve inside `plugins/memory-loop/` |
 | Install a change locally | `mcs sync --global`, or `mcs sync` inside a project |
 | Check installed health | `mcs doctor` |
 
 ```bash
 for t in capture-rules strip-the-anchors applies-to; do
   x() { awk "/<!-- SYNC:$t -->/,/<!-- \/SYNC -->/" "$1"; }
-  diff <(x skills/continuous-learning/SKILL.md) <(x skills/memory-audit/SKILL.md) >/dev/null \
-    && diff <(x skills/continuous-learning/SKILL.md) <(x SYNC-BLOCKS.md) >/dev/null \
+  diff <(x plugins/memory-loop/skills/continuous-learning/SKILL.md) <(x plugins/memory-loop/skills/memory-audit/SKILL.md) >/dev/null \
+    && diff <(x plugins/memory-loop/skills/continuous-learning/SKILL.md) <(x SYNC-BLOCKS.md) >/dev/null \
     && echo "OK   $t" || echo "DRIFT $t"
 done
 ```
@@ -45,7 +45,7 @@ Two harness details are load-bearing rather than incidental:
 
 **Placeholders are baked at sync time, not read at runtime.** `prompts:` in `techpack.yaml` declares `KB_GATE_MODE`; `hooks/kb-gate.sh` carries `MODE="__KB_GATE_MODE__"`, substituted during install. Changing the mode means re-running `mcs sync` — there is no runtime setting. The test suite injects modes the same way (`sed s/__KB_GATE_MODE__/$m/`).
 
-**One dispatcher, four hook events.** `hooks/kb-gate.sh` is registered four times in `techpack.yaml` (UserPromptSubmit, PostToolUse, PreToolUse, SubagentStart) and branches on `hook_event_name`. Matchers are broad on purpose; which agent types count as "discovery" is decided in exactly one place, `GATED_AGENTS`. `hooks/sync-memories.sh` is likewise registered twice, on SessionStart and UserPromptSubmit.
+**One dispatcher, four hook events.** `hooks/kb-gate.sh` is registered four times in `techpack.yaml` (UserPromptSubmit, PostToolUse, PreToolUse, SubagentStart) and branches on `hook_event_name`. Matchers are broad on purpose; which agent types count as "discovery" is decided in exactly one place, `GATED_AGENTS`. `plugins/memory-loop/runtime/sync-memories.sh` is likewise registered twice, on SessionStart and UserPromptSubmit.
 
 **That dispatcher deliberately omits `set -e` and `set -u`**, unlike `sync-memories.sh` which uses `set -uo pipefail`. Its file header explains why and lists rules that are load-bearing: fail open, never `exit 2`, never call `qmd` (it loads an embedding model; far too slow for `PreToolUse`), log every evaluation. Read that header before editing it.
 
@@ -59,7 +59,7 @@ Two harness details are load-bearing rather than incidental:
 
 To measure any of this, `qmd bench <fixture.json> -c memories` is usable as shipped. Its fixture `query` field accepts the structured multi-line form (`intent:`/`lex:`/`vec:`), and a fixture written that way is passed through **unexpanded** — only a bare query string goes down the expansion path. So its `hybrid` row measures the pack's real configuration, not a degraded one. This depends on qmd's graceful-degradation path rather than a documented switch, which is why `@tobilu/qmd` is pinned to an exact version and why one doctor check issues a *default-argument* query: that check is what would catch the behaviour changing under an upgrade.
 
-**The search call shape is stated in three places, deliberately.** "Typed `lex`+`vec` lines, `rerank: false`, `limit: 6`" appears in `templates/continuous-learning.md` (the only thing that reaches a user's `CLAUDE.md`), `skills/continuous-learning/SKILL.md`, and the `SubagentStart` briefing in `hooks/kb-gate.sh`. No single mechanism reaches all three consumers, so this is three copies rather than one source — change one and check the other two. It matters because the unguided path is measurably worse, not just slower.
+**The search call shape is stated in three places, deliberately.** "Typed `lex`+`vec` lines, `rerank: false`, `limit: 6`" appears in `templates/continuous-learning.md` (the only thing that reaches a user's `CLAUDE.md`), `plugins/memory-loop/skills/continuous-learning/SKILL.md`, and the `SubagentStart` briefing in `hooks/kb-gate.sh`. No single mechanism reaches all three consumers, so this is three copies rather than one source — change one and check the other two. It matters because the unguided path is measurably worse, not just slower.
 
 **The index's `global_context` is deliberately not a fourth copy.** qmd serves that one string two ways: as the MCP server's `instructions`, once per connection, and as the `context` field of *every* search result. Guidance placed there is therefore paid for per result — at 342 characters it was 38% of a six-result response — while the only consumer it uniquely reaches is a client with no installed `CLAUDE.md` section, which cannot happen because the template is `isRequired`. So it carries identity only ("this is a project memory KB, not external documentation") and the guidance lives in the three copies that are not echoed. Resist putting the call shape back into it.
 
@@ -78,7 +78,7 @@ To measure any of this, `qmd bench <fixture.json> -c memories` is usable as ship
 
 ## Editing the skills
 
-`skills/continuous-learning` (capture) and `skills/memory-audit` (audit) encode the same rules at two different times: capture decides whether to write a memory, audit decides whether to keep one.
+`plugins/memory-loop/skills/continuous-learning` (capture) and `plugins/memory-loop/skills/memory-audit` (audit) encode the same rules at two different times: capture decides whether to write a memory, audit decides whether to keep one.
 
 **Capture is `isRequired: true`; audit is optional.** Capture must therefore stand alone and can never reference the audit skill's content.
 
@@ -89,3 +89,11 @@ To measure any of this, `qmd bench <fixture.json> -c memories` is usable as ship
 **Check what contradiction a change creates.** Both skills carry emphatic guidance that can overrule a softer new instruction. The audit's "in genuine doubt, prefer DROP" is the clearest example: a new rule saying "report this rather than dropping it" loses unless that guideline is carved out explicitly. After editing, read the new text alongside the sections that push the opposite way.
 
 Six DROP categories are duplicated between the two skills with nothing keeping them in step. Change one side, check the other.
+
+## Codex adapter
+
+The shared indexer defaults to Claude paths; Codex passes `MEMORY_LOOP_HOST=codex` and publishes configuration synchronously before MCP startup. Codex state is separate under `.codex/.memory-loop/`. Do not change the MCS launcher when modifying the Codex adapter.
+
+TypeScript sources live in `src/codex/`; `npm run build` bundles runtime dependencies and `npm test` exercises gate/setup behavior. The plugin ships no Python, node_modules, or TypeScript runner. Setup owns the installed runtime binding in `$CODEX_HOME/memory-loop/runtime.json`; rerun setup when an update changes the cache path.
+
+Codex cannot inspect outgoing prompts reliably. It gates each root spawn on current-turn search plus a successfully persisted parent-curated shared brief. Keep single-use hook tickets, failed-replacement invalidation, 4/8 budgets, fail-open behavior, nested exemption, and root brief delivery to descendants. Batches are sequential by instruction, not host-associated.

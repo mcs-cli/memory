@@ -125,7 +125,7 @@ components:
   # has to exist everywhere that instruction does. An empty index is honest: the
   # server reports "0 markdown documents" in its own instructions.
   #
-  # keep in sync with hooks/sync-memories.sh — it writes the index this opens.
+  # keep in sync with plugins/memory-loop/runtime/sync-memories.sh — it writes the index this opens.
   - id: memory-loop
     description: Semantic search over this project's memories, backed by local embeddings
     isRequired: true
@@ -210,14 +210,14 @@ components:
     description: Extracts learnings and decisions from sessions into memory
     isRequired: true
     skill:
-      source: skills/continuous-learning
+      source: plugins/memory-loop/skills/continuous-learning
       destination: continuous-learning
 
   - id: skill-memory-audit
     displayName: memory-audit skill
     description: Reviews and audits memories to keep the knowledge base lean and valuable
     skill:
-      source: skills/memory-audit
+      source: plugins/memory-loop/skills/memory-audit
       destination: memory-audit
 
   # ── Hooks ───────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ components:
     hookTimeout: 120
     hookStatusMessage: "Indexing memories..."
     hook:
-      source: hooks/sync-memories.sh
+      source: plugins/memory-loop/runtime/sync-memories.sh
       destination: sync-memories.sh
 
   - id: hook-reindex-memories
@@ -251,7 +251,7 @@ components:
     hookTimeout: 120
     hookStatusMessage: "Reindexing memories..."
     hook:
-      source: hooks/sync-memories.sh
+      source: plugins/memory-loop/runtime/sync-memories.sh
       destination: sync-memories.sh
 
   # ── KB-first delegation ─────────────────────────────────────────────────
