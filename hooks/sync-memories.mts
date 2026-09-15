@@ -26,8 +26,13 @@ global_context: |
   discoveries — not external documentation.
 `;
   if (attempt(() => read(config)) !== content) {
-    writeFileSync(`${config}.new`, content);
-    renameSync(`${config}.new`, config);
+    const temporary = `${config}.${process.pid}.new`;
+    try {
+      writeFileSync(temporary, content);
+      renameSync(temporary, config);
+    } finally {
+      rmSync(temporary, { force: true });
+    }
   }
   if (!isDirectory(memories)) return;
 

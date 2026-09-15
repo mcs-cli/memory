@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import type { TestContext } from "node:test";
@@ -56,6 +56,20 @@ test("config is registered before memories exist, repaired on drift, and stable 
   writeFileSync(f.config, "drift");
   f.run();
   assert.equal(readFileSync(f.config, "utf8"), expected);
+});
+
+test("config replacement leaves other temporary files alone and cleans up after a failed rename", t => {
+  const f = indexer(t);
+  mkdirSync(f.config, { recursive: true });
+  writeFileSync(`${f.config}.new`, "another writer");
+  assert.deepEqual(f.run(), []);
+  assert.deepEqual(readdirSync(f.directory).sort(), ["memory-loop.yml", "memory-loop.yml.new"]);
+  assert.equal(readFileSync(`${f.config}.new`, "utf8"), "another writer");
+  rmSync(f.config, { recursive: true });
+  assert.equal(f.run().length, 4);
+  assert.match(readFileSync(f.config, "utf8"), /global_context:/);
+  assert.equal(readFileSync(`${f.config}.new`, "utf8"), "another writer");
+  assert.deepEqual(readdirSync(f.directory).filter(file => file.endsWith(".new")), ["memory-loop.yml.new"]);
 });
 
 for (const mode of ["update_fails", "embed_fails", "status_fails", "pending"]) {
