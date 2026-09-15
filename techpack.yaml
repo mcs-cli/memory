@@ -45,11 +45,6 @@ components:
             [ -n "$v" ] && [ "$v" -ge 22 ]
         fixCommand: "brew upgrade node"
 
-  - id: gh
-    displayName: GitHub CLI
-    description: GitHub CLI for PR operations
-    brew: gh
-
   - id: jq
     displayName: jq
     description: Lightweight JSON processor
