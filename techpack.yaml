@@ -129,7 +129,7 @@ components:
       command: /bin/sh
       args:
         - "-c"
-        - |
+        - |-
           r=$(git rev-parse --show-toplevel 2>/dev/null)
           [ -n "$r" ] || r="${CLAUDE_PROJECT_DIR:-$PWD}"
           d="$r/.claude/.kb-index"
