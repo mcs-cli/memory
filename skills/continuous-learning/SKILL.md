@@ -99,13 +99,7 @@ After completing any task, evaluate in two stages.
 
 If the forcing-function gate fails, or no other prompt answers yes → skip. Otherwise continue to Stage B.
 
-**Stage B — Apply the three Capture Rules above as hard gates. All three must pass.** Enforcement maps:
-
-1. **Rule 1 (project-tied)** — apply Step 4 Check 1 (strip-the-anchors).
-2. **Rule 2 (anonymous)** — apply Step 4 Check 2 (identifier scan).
-3. **Rule 3 (pattern, not preference)** — verify by codebase usage, lint/formatter config, style guide, or team agreement (written or verbal — see the synced rule for the full list of valid evidence).
-
-If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, replace tool-only substance with the actual project anchor) or skip. Do not save partial-fit memories.
+**Stage B — The three Capture Rules above are hard gates; all three must pass.** Step 4's Checks 1 and 2 enforce Rules 1 and 2; verify Rule 3 against the evidence the rule lists. If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, replace tool-only substance with the actual project anchor) or skip. Do not save partial-fit memories.
 
 ### Step 2: Search Existing Knowledge
 
@@ -130,7 +124,7 @@ is a guess — and the cost of guessing wrong is a duplicate memory or a lost re
 Decide what to do, in this order of preference:
 
 1. **Knowledge is already captured.** Skip.
-2. **The new knowledge extends or refines an existing memory.** Prefer this: `Edit` the existing memory. The KB stays lean and a stronger single memory beats two partial ones. When editing, run Step 4 Check 3 first. Where the new knowledge contradicts or supersedes a statement, rewrite that statement where it stands — a `Related:` note is not a correction — unless Check 3 prints `pending`: then keep the current statement and add the conditional one beside it. If the memory being edited carries a `Pending:` line whose change has since merged, fold it in with the same edit: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Re-read the whole file afterwards to catch a broken splice.
+2. **The new knowledge extends or refines an existing memory.** Prefer this: `Edit` the existing memory, following **Update existing** in Step 4. The KB stays lean and a stronger single memory beats two partial ones.
 3. **The content is too different to merge but still related.** Save a new memory and add a `Related:` cross-link to the neighbor. If the relationship is bidirectional, also `Edit` the neighbor to add a reciprocal `Related:` entry.
 
 Use `Related:` for memories that share root causes, build on each other, contradict each other, or supersede older decisions. Don't cross-link every vaguely overlapping memory.
@@ -143,14 +137,7 @@ KB search: "<query>" -> <n> hits, <what they covered> -> <branch taken, and the 
 
 ### Step 3: Research (When Appropriate)
 
-**For general topics** — search available documentation sources first (the user may have MCP servers providing official docs for frameworks or libraries), then fall back to web search:
-```
-WebSearch(query: "<library or tool> <version> <the specific behavior observed>")
-```
-
-Research should **enrich** project-specific knowledge, not replace it. The goal is to add context or verify a finding — not to save generic knowledge that any LLM already knows. If the research result is general programming advice without a project-specific angle, skip saving it.
-
-**Skip research for:** project-specific conventions, time-sensitive captures.
+To verify a finding about a library or tool, check available documentation sources first, then `WebSearch(query: "<library or tool> <version> <the specific behavior observed>")`. Research enriches project knowledge; general advice with no project angle is not saved. Skip research for project-specific conventions and time-sensitive captures.
 
 ### Step 4: Route and Save
 
@@ -168,7 +155,7 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 
 #### Mandatory pre-`Write` checks
 
-Run these checks as visible output before any `Write` to `<project>/.claude/memories/`. Before an `Edit`, run them on the added text; if Check 1 fails, route that text, not the memory. Hidden reasoning is easy to skip; printed output is reviewable.
+Run these checks as visible output before any `Write` to `<project>/.claude/memories/`, and on the added text before any `Edit`. Hidden reasoning is easy to skip; printed output is reviewable.
 
 **Check 1: Strip-the-anchors (routing).**
 
@@ -181,13 +168,7 @@ Print, in two short lines, before the save:
 - **Anchors stripped:** comma-separated list of every project-specific reference identified above. If none → the draft has no project tie; reject the save.
 - **Substance without anchors:** one sentence describing what is left after stripping (e.g. *"the project's coordinator pattern between view-models and routing"*, *"how a third-party HTTP-debugging proxy's mock-rule syntax works"*).
 
-If the substance line describes general, tool, language, or environment knowledge, reject the `Write` to `memories/`. Emit the content as a draft `CLAUDE.local.md` section (heading `## <Tool/Service Name>`) and a one-line note: "this is environment/tool config — consider adding the section above to `CLAUDE.local.md`." Stop. Do not edit `CLAUDE.local.md`; the user decides.
-
-*Worked example.* Draft says "how to write a mock rule for an HTTP-debugging proxy returning 500 for `/checkout`."
-- Anchors stripped: `/checkout`.
-- Substance without anchors: "how the proxy's mock-rule syntax works."
-
-Substance is tool knowledge → reject the `memories/` save; emit as a `CLAUDE.local.md` draft section under the proxy's name.
+If the substance line describes general, tool, language, or environment knowledge, reject the `Write` to `memories/`. Emit the content as a draft `CLAUDE.local.md` section (heading `## <Tool/Service Name>`) and a one-line note: "this is environment/tool config — consider adding the section above to `CLAUDE.local.md`." Stop (on an Edit, route only the added text — see Update existing). Do not edit `CLAUDE.local.md`; the user decides.
 
 This shape forces the test to happen — you cannot list anchors without finding them, cannot describe the substance without evaluating it — without reprinting the full draft.
 
@@ -203,7 +184,9 @@ Under version control, verify the memory's central claim against the default bra
 
 - **Default branch:** `holds` | `pending (<what must merge>)` | `no VCS`
 
-`pending` requires a change you know is in flight, usually this session's own branch; a claim missing from the default branch with no such change is wrong, not pending — don't save it. On `pending`, phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <what must merge>` on the line after `Applies to:` — a ticket, a PR, or a short description of the change, never a branch name. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
+**`pending` only when** you know the change is in flight, usually this session's own branch. A claim missing from the default branch with no such change is wrong, not pending — don't save it.
+
+**How to write it:** phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <what must merge>` on the line after `Applies to:` — a ticket, a PR, or a short description of the change, never a branch name. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
 
 **Save (only after Checks 1 and 2 pass and Check 3 is printed):**
 ```
@@ -211,6 +194,12 @@ Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", 
 ```
 
 **Update existing:**
+
+1. Run the checks on the added text. If Check 1 fails, route that text, not the memory.
+2. Rewrite a contradicted or superseded statement where it stands — a `Related:` note is not a correction. If Check 3 printed `pending`, keep the statement and add the conditional one beside it.
+3. If the memory carries a `Pending:` line whose change has since merged, fold it in with the same edit: remove the superseded statement, the conditional phrasing, and the `Pending:` line.
+4. Re-read the whole file afterwards to catch a broken splice.
+
 ```
 Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<section to update>", new_string: "<updated section>")
 ```
@@ -219,7 +208,7 @@ Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<s
 
 ## Quality Gates
 
-> Capture Rules are gated in **Stage B** above; do not re-evaluate them here. This checklist covers formatting, quality, and security only — different concerns.
+> Capture Rules are gated in **Stage B**; this checklist covers formatting, quality, and security only.
 
 Before saving any memory, verify:
 - [ ] Name follows the correct pattern (`learning_` or `decision_<domain>_`)
@@ -249,15 +238,11 @@ Anti-examples, generalized — do not create memories like these:
 | One-time bug fix self-evident in current code | "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity" | **[Forcing-function]** The fix is a small diff; the code reads correctly today. Save only if the bug class is recurring and the memory teaches the *avoidance pattern*, not the one fix. |
 | Research artifact for deferred or dormant work | "Cross-platform audit / options-considered for feature X (deferred indefinitely)" | **[Forcing-function]** Useful when the work resumes — but it belongs in a planning doc or `docs/`, not the memory KB. The KB is for things that change how a session works on the active codebase today. |
 
-**Internal docs are fair game.** A memory summarizing a Confluence page, ADR, RFC, or team-wiki entry is project knowledge — those sources aren't "documentation anyone can look up." Always include the source URL in `References:` so the memory points at the canonical version and readers can check for drift.
-
-When the underlying knowledge *is* salvageable, rewrite before saving — or skip entirely:
+When the underlying knowledge *is* salvageable, rewrite before saving:
 
 | Bad | Good |
 |-----|------|
-| Memory describes how a CLI flag works | *skip — that's tool documentation, not project knowledge* |
 | Problem section names a specific engineer hitting a cache bug in auth | *"Auth flow hits a cache bug under condition X"* — drop the actor, keep the symptom |
-| *"I prefer early returns"* and the codebase mixes both styles freely | *skip — preference, not pattern* |
 | *"I prefer early returns"*, existing code consistently uses them (or the team agreed), and no lint rule, formatter, or compiler check enforces them | Save as `decision_codestyle_early_returns` citing the codebase usage or agreement — Rule 3 makes it a pattern; the forcing-function passes only because nothing enforces it and new code could break it |
 
 ---
@@ -284,7 +269,7 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 
 1. Review conversation history for extractable knowledge.
 2. Search existing memories following Step 2 of the Extraction Workflow.
-3. Filter candidates through Stage A's forcing-function gate and the Capture Rules. Drop anything that fails the forcing-function (the code already drives the behavior), Rule 1 (no project tie), Rule 2 (names an engineer), or Rule 3 (preference without project evidence).
+3. Filter candidates through Step 1 — Stage A's forcing-function gate and Stage B's Capture Rules.
 4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks. The cap is deliberate: a long session can yield many qualifying memories, and three is the most worth adding at once — the gates decide what is eligible, the cap decides how many land per session. Note any you set aside.
 5. Report what was created and why in a brief summary.
 

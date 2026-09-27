@@ -67,9 +67,8 @@ Evaluate each memory against the criteria below, grouped into three:
 ### Group A — Capture Rules, restated
 
 #### A.1 Tied to at least one project (Capture Rule 1)
-- Does the memory's content stay tied to a real project named in `Applies to:` — its codepaths, architecture, build/deploy setup, test strategy, tooling choices, team workflow, or recurring implementation patterns?
-- DROP memories that duplicate **public** documentation anyone could look up (language reference, public CLI/API docs, framework README) and memories whose content has no real tie to any project in `Applies to:`.
-- KEEP summaries of **internal** docs (Confluence, ADRs, RFCs, wiki). If an internal-doc summary lacks a `References:` link back to the source, flag for UPDATE (add the link) rather than DROP.
+- DROP memories that duplicate **public** documentation, or that have no real tie to any project in `Applies to:`.
+- KEEP summaries of **internal** docs. One that lacks a `References:` link to its source is UPDATE (add the link), not DROP.
 - Apply the strip-the-anchors test:
 
 <!-- SYNC:strip-the-anchors -->
@@ -79,13 +78,10 @@ Evaluate each memory against the criteria below, grouped into three:
 If the test fails, recommend DROP — or UPDATE only if a rewrite around the actual project anchor produces something genuinely project-specific.
 
 #### A.2 Anonymous (Capture Rule 2)
-- Does the memory name specific engineers, GitHub/Slack handles, or emails anywhere (problem, example, footnote)?
-- Does it narrate "who investigated whom" or "who fixed what"?
+- Look for names, handles, emails, and "who fixed what" narration anywhere in the memory.
 - **Verdict:** UPDATE to strip the identifier entirely (describe the artifact, not the actor) when the underlying knowledge is still useful; DROP when the identifier *is* the content and removing it leaves nothing.
 
 #### A.3 Project pattern, not personal preference (Capture Rule 3)
-- Is the memory a `decision_` backed by real evidence the pattern is the project's? Valid evidence: consistent use in the codebase, lint/formatter config, style guide / docs, or a team agreement (written *or* verbal — not every agreement is in a doc).
-- Red-flag phrases inside the memory: *"I prefer,"* *"I like,"* *"my style."*
 - Spot-check the repo — **codebase usage is the strongest single signal**. If the declared pattern is demonstrably present in existing code, the memory is a pattern even without a written rule. If the codebase is inconsistent and there's no config/doc/agreement, it is a preference.
 - **Verdict:** DROP when no evidence exists anywhere. UPDATE when the pattern is real (visible in code, or the user confirms a team agreement) but the memory is phrased as personal taste; rewrite to point at the actual evidence.
 
@@ -276,6 +272,4 @@ Knowledge base reduced from 42 → 34 files.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
 - **Apply criteria with teeth, not deference.** Past audits drifted into KEEP-by-default because each memory had *some* tie to the project. The forcing-function test (B.1) is the correction: KEEP requires identifying behavior the memory drives, not just absence of error. When the DROP categories above match, call DROP — don't soften it to UPDATE or stash in KEEP "to be safe."
 - **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job. This is about doubt over a memory's *value*. Doubt over a *fact you could not check* is different — an unverified claim is a reason to ask, not to delete.
-- **Watch for the "but it's true and project-specific" trap.** That sentence is A.1 and C.4 passing — it says nothing about B.1. Two-pass thinking: first verify, then ask "does this change behavior?"
-- **Batch size matters.** 10-15 per batch keeps the review manageable.
 - **End-of-audit check for broken cross-links.** After DROPs land, grep `Related:` / `References:` lines for any pointer to a deleted filename and clean those up — broken refs accumulate silently otherwise.
