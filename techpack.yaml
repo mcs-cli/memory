@@ -52,7 +52,6 @@ components:
   - id: qmd-install
     displayName: qmd
     description: Local search engine over markdown — no daemon, bundled SQLite + sqlite-vec
-    dependencies: [node]
     type: configuration
     shell: "npm install -g @tobilu/qmd@2.8.3"
     doctorChecks:
@@ -91,7 +90,6 @@ components:
   - id: qmd-model
     displayName: Embedding model
     description: Downloads Qwen3-Embedding-0.6B once (~610 MB, shared across all projects)
-    dependencies: [qmd-install]
     type: configuration
     shell: |
       d=$(mktemp -d)
@@ -123,8 +121,6 @@ components:
   # keep in sync with hooks/sync-memories.mts — it writes the index this opens.
   - id: memory-loop
     description: Semantic search over this project's memories, backed by local embeddings
-    isRequired: true
-    dependencies: [node, qmd-install, qmd-model]
     mcp:
       command: /bin/sh
       args:
@@ -203,7 +199,6 @@ components:
   - id: skill-continuous-learning
     displayName: continuous-learning skill
     description: Extracts learnings and decisions from sessions into memory
-    isRequired: true
     skill:
       source: skills/continuous-learning
       destination: continuous-learning
@@ -219,7 +214,6 @@ components:
   - id: hook-helpers
     displayName: Shared hook helpers
     description: Shared filesystem and project-path helpers for the hooks
-    dependencies: [node]
     hook:
       source: hooks/shared.mts
       destination: shared.mts
@@ -227,7 +221,6 @@ components:
   - id: hook-continuous-learning
     displayName: Memory loop activator
     description: Reminds to evaluate learnings on each prompt
-    isRequired: true
     hookEvent: UserPromptSubmit
     hook:
       source: hooks/memory-loop-activator.sh
@@ -236,7 +229,6 @@ components:
   - id: hook-sync-memories
     displayName: Sync memories hook
     description: Indexes memories into the project's search index on session start
-    dependencies: [qmd-install, hook-helpers]
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: SessionStart
     hookAsync: true
@@ -249,7 +241,6 @@ components:
   - id: hook-reindex-memories
     displayName: Reindex memories hook
     description: Reindexes memories when they have changed mid-session
-    dependencies: [qmd-install, hook-helpers]
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: UserPromptSubmit
     hookAsync: true
@@ -268,7 +259,6 @@ components:
   - id: hook-kb-gate-turn
     displayName: KB gate — turn boundary
     description: Marks each new prompt so the KB check is required again per turn
-    dependencies: [hook-helpers]
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: UserPromptSubmit
     hook:
@@ -287,7 +277,6 @@ components:
   - id: hook-kb-gate-record
     displayName: KB gate — record searches
     description: Records each KB search so delegated discovery can be checked against it
-    dependencies: [hook-helpers]
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
     hookMatcher: "mcp__memory-loop__query"
@@ -305,7 +294,6 @@ components:
   - id: hook-kb-gate-check
     displayName: KB gate — check sub-agent spawns
     description: Warns or blocks when a discovery sub-agent is spawned without KB findings in its prompt
-    dependencies: [hook-helpers]
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PreToolUse
     # The spawn tool is `Agent` in current Claude Code and `Task` in older
@@ -323,7 +311,6 @@ components:
   - id: hook-kb-subagent-brief
     displayName: Sub-agent KB brief
     description: Tells discovery sub-agents that the KB exists, so they search it instead of sweeping files
-    dependencies: [hook-helpers]
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: SubagentStart
     hook:
