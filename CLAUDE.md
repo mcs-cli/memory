@@ -81,4 +81,4 @@ To measure any of this, `qmd bench <fixture.json> -c memories` is usable as ship
 
 **Check what contradiction a change creates.** Both skills carry emphatic guidance that can overrule a softer new instruction. The audit's "in genuine doubt, prefer DROP" is the clearest example: a new rule saying "report this rather than dropping it" loses unless that guideline is carved out explicitly. After editing, read the new text alongside the sections that push the opposite way.
 
-Six DROP categories are duplicated between the two skills with nothing keeping them in step. Change one side, check the other.
+Six DROP categories are duplicated between the two skills with nothing keeping them in step, and so are capture's Staleness Prevention and the audit's C.5 Staleness Signals, and the `Pending:` convention (capture's Check 3 and Step 2, the audit's Step 2, DROP category A, and C.5), and rewrite-in-place editing (capture's Step 2, the audit's Step 4). Change one side, check the other.

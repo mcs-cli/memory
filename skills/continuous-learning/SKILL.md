@@ -6,14 +6,27 @@ description: >
   .claude/memories/ for codebase knowledge, CLAUDE.local.md for environment/tool/instance
   config, or skip for public documentation. Also use when the user asks to "run a
   retrospective", "extract learnings", or "save what we learned" from the current session.
-allowed-tools: Write, Read, Glob, Edit, Bash, WebSearch, mcp__memory-loop__query, mcp__memory-loop__get
+allowed-tools:
+  - Read
+  - Glob
+  - WebSearch
+  - Write(.claude/memories/**)
+  - Edit(.claude/memories/**)
+  - Bash(git grep *)
+  - Bash(git show *)
+  - Bash(git rev-parse *)
+  - Bash(git remote get-url *)
+  - mcp__memory-loop__query
+  - mcp__memory-loop__get
+  - mcp__memory-loop__multi_get
+disallowed-tools: AskUserQuestion
 ---
 
 # Continuous Learning Skill
 
-Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a `CLAUDE.local.md` section, public documentation → skip. The skill is the **only** path to `memories/` — never `Write` there directly. Suggesting `CLAUDE.local.md` is a successful outcome, not a failure.
+Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a `CLAUDE.local.md` section, public documentation → skip. Suggesting `CLAUDE.local.md` is a successful outcome, not a failure.
 
-> **Note:** `<project>` refers to the current working directory (project root) throughout this document. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
+> **Note:** `<project>` is the project root throughout this document: `git rev-parse --show-toplevel`, else `CLAUDE_PROJECT_DIR`, else the current working directory — the same order the memory hooks use. Run every command from there and never `cd` into `.claude/memories/` — the memories may live in a separate git repo, so `git` commands would silently answer for the wrong one. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
 
 ## Memory Categories
 
@@ -72,7 +85,7 @@ Every memory must satisfy all three rules.
 
 ## Extraction Workflow
 
-> **Autonomous by default.** This skill saves memories automatically when the quality gates are met. Never ask the user for permission to save — evaluate, decide, and save silently. Only mention saved memories in a brief one-line note after the main task response.
+> **Autonomous by default.** This skill saves memories automatically when the quality gates are met. Never ask the user for permission to save — evaluate, decide, and save silently. *Silently* means without asking; the Step 2 and Step 4 check lines are still printed. Otherwise, only mention saved memories in a brief one-line note after the main task response.
 
 ### Step 1: Evaluate the Current Task
 
@@ -81,7 +94,7 @@ After completing any task, evaluate in two stages.
 **Stage A — Is it worth saving?**
 - Did this require non-obvious investigation or debugging?
 - Was a choice made about architecture, patterns, or approach?
-- Is there an established project convention worth documenting?
+- Is there an established project convention the code follows but does not make obvious?
 - **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the current code or a mechanical check already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
 
 If the forcing-function gate fails, or no other prompt answers yes → skip. Otherwise continue to Stage B.
@@ -117,7 +130,7 @@ is a guess — and the cost of guessing wrong is a duplicate memory or a lost re
 Decide what to do, in this order of preference:
 
 1. **Knowledge is already captured.** Skip.
-2. **The new knowledge extends or refines an existing memory.** Prefer this: `Edit` the existing memory. The KB stays lean and a stronger single memory beats two partial ones.
+2. **The new knowledge extends or refines an existing memory.** Prefer this: `Edit` the existing memory. The KB stays lean and a stronger single memory beats two partial ones. When editing, run Step 4 Check 3 first. Where the new knowledge contradicts or supersedes a statement, rewrite that statement where it stands — a `Related:` note is not a correction — unless Check 3 prints `pending`: then keep the current statement and add the conditional one beside it. If the memory being edited carries a `Pending:` line whose change has since merged, fold it in with the same edit: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Re-read the whole file afterwards to catch a broken splice.
 3. **The content is too different to merge but still related.** Save a new memory and add a `Related:` cross-link to the neighbor. If the relationship is bidirectional, also `Edit` the neighbor to add a reciprocal `Related:` entry.
 
 Use `Related:` for memories that share root causes, build on each other, contradict each other, or supersede older decisions. Don't cross-link every vaguely overlapping memory.
@@ -132,7 +145,7 @@ KB search: "<query>" -> <n> hits, <what they covered> -> <branch taken, and the 
 
 **For general topics** — search available documentation sources first (the user may have MCP servers providing official docs for frameworks or libraries), then fall back to web search:
 ```
-WebSearch(query: "<topic> best practices <current year>")
+WebSearch(query: "<library or tool> <version> <the specific behavior observed>")
 ```
 
 Research should **enrich** project-specific knowledge, not replace it. The goal is to add context or verify a finding — not to save generic knowledge that any LLM already knows. If the research result is general programming advice without a project-specific angle, skip saving it.
@@ -148,14 +161,14 @@ Read [references/templates.md](references/templates.md) for template structures.
 Fill in `Applies to:` directly under the title heading of every memory.
 
 <!-- SYNC:applies-to -->
-**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the set of memories the search index actually covers, which is folder-based and set automatically by the indexing hook.
+**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the project directory's basename only when the repo has no remote configured or the project is not a git repo. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the set of memories the search index actually covers, which is folder-based and set automatically by the indexing hook.
 
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->
 
 #### Mandatory pre-`Write` checks
 
-Run both checks as visible output before any `Write` to `<project>/.claude/memories/`. Hidden reasoning is easy to skip; printed output is reviewable.
+Run these checks as visible output before any `Write` to `<project>/.claude/memories/`. Before an `Edit`, run them on the added text; if Check 1 fails, route that text, not the memory. Hidden reasoning is easy to skip; printed output is reviewable.
 
 **Check 1: Strip-the-anchors (routing).**
 
@@ -180,9 +193,19 @@ This shape forces the test to happen — you cannot list anchors without finding
 
 **Check 2: Personal-identifier scan.**
 
-Scan the drafted content for personal identifiers. Look for `@` characters (handles, emails), `<word>/<TICKET>-` and `<word>/<ticket>-description` branch-name shapes, `<word>@<word>` email shapes, and any first-name-looking tokens in examples, commit references, or narration. Any hit → rewrite to describe the artifact (the bug, pattern, decision) without the actor, or skip the save. Mechanical grep, not a vibe check.
+Scan the drafted content for personal identifiers. Look for `@` characters (handles, emails), `<word>/<TICKET>-` and `<word>/<ticket>-description` branch-name shapes, `<word>@<word>` email shapes, and any first-name-looking tokens in examples, commit references, or narration. Any hit → rewrite to describe the artifact (the bug, pattern, decision) without the actor, or skip the save. Mechanical grep, not a vibe check. Print one line:
 
-**Save (only after both checks pass):**
+- **Identifiers:** `none` | `rewrote <what>` | `skipped`
+
+**Check 3: Default-branch state.**
+
+Under version control, verify the memory's central claim against the default branch, not only the working tree. Resolve the ref without fetching — `git rev-parse --verify origin/HEAD`, else the local default branch (e.g. `main`, `master`, `develop`) — then `git grep <symbol> <ref>`, or `git show <ref>:<path>` when the claim is not greppable. Print one line:
+
+- **Default branch:** `holds` | `pending (<what must merge>)` | `no VCS`
+
+`pending` requires a change you know is in flight, usually this session's own branch; a claim missing from the default branch with no such change is wrong, not pending — don't save it. On `pending`, phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <what must merge>` on the line after `Applies to:` — a ticket, a PR, or a short description of the change, never a branch name. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
+
+**Save (only after Checks 1 and 2 pass and Check 3 is printed):**
 ```
 Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", content: "<structured markdown>")
 ```
@@ -201,10 +224,10 @@ Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<s
 Before saving any memory, verify:
 - [ ] Name follows the correct pattern (`learning_` or `decision_<domain>_`)
 - [ ] Content uses the appropriate template from references/templates.md
-- [ ] Solution is verified to work (not theoretical)
+- [ ] Solution is verified to work (not theoretical), on the branch it describes
 - [ ] Content is specific enough to be actionable
 - [ ] Content is general enough to be reusable
-- [ ] No sensitive information (credentials, internal URLs)
+- [ ] No sensitive information (credentials, tokens, private endpoints) — an internal doc's link in `References:` is expected, not sensitive
 - [ ] References included if external sources were consulted
 
 ### Do Not Save
@@ -235,7 +258,7 @@ When the underlying knowledge *is* salvageable, rewrite before saving — or ski
 | Memory describes how a CLI flag works | *skip — that's tool documentation, not project knowledge* |
 | Problem section names a specific engineer hitting a cache bug in auth | *"Auth flow hits a cache bug under condition X"* — drop the actor, keep the symptom |
 | *"I prefer early returns"* and the codebase mixes both styles freely | *skip — preference, not pattern* |
-| *"I prefer early returns"* and existing code consistently uses them (or a lint rule enforces it, or the team agreed) | Save as `decision_codestyle_early_returns` citing the codebase usage, rule, or agreement — now it's a pattern with evidence |
+| *"I prefer early returns"*, existing code consistently uses them (or the team agreed), and no lint rule, formatter, or compiler check enforces them | Save as `decision_codestyle_early_returns` citing the codebase usage or agreement — Rule 3 makes it a pattern; the forcing-function passes only because nothing enforces it and new code could break it |
 
 ---
 
@@ -245,8 +268,8 @@ Before saving, check memory content against these rules:
 
 - **No line numbers.** Reference symbols (types, functions, methods) instead — they survive refactors.
 - **Prefer module-level paths** over deep file paths. Use full paths only for stable, well-known files.
-- **Use semantic anchors** — method signatures, interface and type names, and architectural concepts are durable.
-- **Omit transient details** — feature flags being removed, in-progress PR numbers, temporary workarounds.
+- **Use semantic anchors** — method signatures, interface and type names, and architectural concepts are durable. For personal or environment tooling, name the action, not the tool (*"clean, then rebuild"*, not a specific MCP tool or local CLI) — which tool does it is environment config. Commands the project's own scripts or CI define stay verbatim.
+- **Omit transient details** — feature flags being removed, in-progress PR numbers (a `Pending:` line excepted), temporary workarounds without a removal condition, and the story of how the knowledge was found (PR sequences, attempts, reverts): state what it taught as a rule.
 
 **Good:** `SessionManager.refreshToken` in the `Auth` module
 **Bad:** `src/features/auth/session/SessionManager.<ext>:142`
@@ -261,7 +284,7 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 
 1. Review conversation history for extractable knowledge.
 2. Search existing memories following Step 2 of the Extraction Workflow.
-3. Filter candidates through the Capture Rules. Drop anything that fails Rule 1 (no project tie), Rule 2 (names an engineer), or Rule 3 (preference without project evidence).
+3. Filter candidates through Stage A's forcing-function gate and the Capture Rules. Drop anything that fails the forcing-function (the code already drives the behavior), Rule 1 (no project tie), Rule 2 (names an engineer), or Rule 3 (preference without project evidence).
 4. Save the top 1–3 highest-value candidates that pass, following Step 4's pre-`Write` checks. The cap is deliberate: a long session can yield many qualifying memories, and three is the most worth adding at once — the gates decide what is eligible, the cap decides how many land per session. Note any you set aside.
 5. Report what was created and why in a brief summary.
 

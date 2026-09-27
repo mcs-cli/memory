@@ -5,12 +5,23 @@ description: >
   Use this skill when the user says "audit memories", "review memories", "clean up memories",
   "memory audit", "check my memories", or wants to prune, deduplicate, or assess the quality
   of their stored learnings and decisions. This is a manual-only skill — never trigger automatically.
-allowed-tools: Read, Glob, Grep, Edit, Bash, Write, mcp__memory-loop__query, mcp__memory-loop__get, AskUserQuestion
+allowed-tools:
+  - Read
+  - Glob
+  - Grep
+  - AskUserQuestion
+  - Bash(git grep *)
+  - Bash(git show *)
+  - Bash(git rev-parse *)
+  - Bash(git remote get-url *)
+  - mcp__memory-loop__query
+  - mcp__memory-loop__get
+  - mcp__memory-loop__multi_get
 ---
 
 # Memory Audit Skill
 
-Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` refers to the current working directory. **DROP is not a failure** — deleting a memory that does not qualify (or that belongs in `CLAUDE.local.md`, in a planning doc, or in the tool's own docs) is the audit doing its job.
+Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` is the project root: `git rev-parse --show-toplevel`, else `CLAUDE_PROJECT_DIR`, else the current working directory — the same order the memory hooks use. **DROP is not a failure** — deleting a memory that does not qualify (or that belongs in `CLAUDE.local.md`, in a planning doc, or in the tool's own docs) is the audit doing its job.
 
 Over time, memory files accumulate — some become stale, some duplicate each other, some capture generic knowledge that doesn't belong in a project-specific KB. This skill walks through every memory with the user, recommending **KEEP**, **DROP**, or **UPDATE** with clear rationale, and only acts on user-approved changes.
 
@@ -36,7 +47,7 @@ The audit enforces these rules through the criteria below — see Group A.
 ## The `Applies to:` field
 
 <!-- SYNC:applies-to -->
-**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the working directory's basename only when the repo has no remote configured. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the set of memories the search index actually covers, which is folder-based and set automatically by the indexing hook.
+**The `Applies to:` field.** Place `**Applies to:**` on the line immediately after the `# Title` heading of every memory; it declares which project(s) the memory targets. Use the **git repo name** — the last path segment of `git remote get-url origin`, with `.git` stripped (e.g. `git@github.com:org/repo.git` → `repo`; `https://github.com/owner/my-app.git` → `my-app`). Fall back to the project directory's basename only when the repo has no remote configured or the project is not a git repo. Use the repo name — not the directory basename — because folder names vary across clones while the repo name is stable. This is also why `Applies to:` may differ from the set of memories the search index actually covers, which is folder-based and set automatically by the indexing hook.
 
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->
@@ -115,7 +126,8 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
 - **Deep file paths** — full nested paths are fragile. Recommend UPDATE to use module-level references unless the path is stable and well-known.
-- **Transient details** — feature flag names being removed, in-progress PR numbers, temporary workarounds with known expiry.
+- **Transient details** — feature flag names being removed, in-progress PR numbers (a `Pending:` line excepted), temporary workarounds whose removal condition has been met, or that state none.
+- **Narrative and tool names** — the story of how the knowledge was found (PR sequences, attempts, reverts), or a personal or environment tool (an MCP tool name, a local CLI) where naming the action would do — commands the project's own scripts or CI define stay. Recommend UPDATE to state the rule it taught and name the action.
 - References to features or files that may have been removed or heavily refactored.
 - **Broken `Related:` links** — an entry in the memory's `Related:` section that points at a memory filename no longer present (DROP'd or renamed during a previous audit). Recommend UPDATE to fix the link to its new name or remove the entry.
 - Old dates without timeless content — treat as a signal for closer scrutiny, not an automatic DROP.
@@ -129,6 +141,7 @@ The categories below are the recurring concrete shapes of B.1 (forcing-function)
 ### A. Self-marked superseded / deferred / abandoned
 - The memory itself says **SUPERSEDED**, **deferred indefinitely**, **closed without implementation**, **path abandoned**, or points at another memory as the current decision.
 - The "historical context" argument is rarely worth a file. If the superseder cross-links back, that's enough provenance. DROP the older one.
+- A `Pending:` line is not deferral — it marks work in flight, judged by whether it merged (Step 2).
 
 ### B. Pure historical records of shipped one-time changes
 - Folder renames, file renames, identifier migrations, org migrations *that are done*. Once shipped, `git log` answers "why is this named X?" The memory adds nothing actionable. This assumes version control holds the history — without it nothing else records the change, so judge on behavior alone.
@@ -183,6 +196,7 @@ If the directory is missing or empty, report the situation (specify whether it d
 - Grep for every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
 - Spot-check any line numbers and historical line counts; flag stale ones for UPDATE.
 - Watch for `Applies to:` typos (e.g. `mcs-2` when the project is `mcs`) — quick one-line fixes.
+- Check memories carrying a `**Pending:**` line against the default branch first (resolve the ref as capture's Check 3 does). Merged → UPDATE to the merged state: remove the statement it superseded, the conditional phrasing, and the `Pending:` line. Still in flight → leave it. Abandoned → UPDATE to remove the conditional part, or DROP if nothing else remains.
 
 Read memories in batches (10-15 at a time) and produce a verdict table for each batch:
 
@@ -229,7 +243,7 @@ Run only after Step 3 has produced an explicit approval (or per-item decisions) 
 
 - **DROP**: Delete the file with `Bash(rm <path>)`
 - **UPDATE (rename)**: Rename with `Bash(mv <old> <new>)`
-- **UPDATE (content)**: Use `Edit` or `Write` to update the file
+- **UPDATE (content)**: Use `Edit` or `Write` to update the file. Rewrite a contradicted statement where it stands rather than appending a correction, then re-read the whole file to catch a broken splice.
 - **UPDATE (merge)**: Create the merged file, then delete the originals
 - **UPDATE (uncertain)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
 - **Stop at the filesystem.** Never `git add`, commit, or push memory changes — a KB may be tracked in the project's own repo, kept in a separate repo with its own propagation rules, or gitignored and purely local.

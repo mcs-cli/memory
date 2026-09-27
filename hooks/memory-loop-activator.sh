@@ -13,6 +13,6 @@ If this session produced reusable knowledge worth preserving, invoke
 Skill(continuous-learning) — the skill evaluates and routes the knowledge
 to the correct destination. Do not ask permission.
 
-NEVER write to .claude/memories/ directly. Always go through the skill
-so the routing and quality gates run.
+NEVER write to .claude/memories/ directly. Only the continuous-learning
+and memory-audit skills write there, so the routing and quality gates run.
 EOF

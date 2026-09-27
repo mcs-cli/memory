@@ -17,7 +17,7 @@ Before writing code, planning, or exploring — **always search the knowledge ba
 
    Results carry a score of `1/rank`, not a confidence — a poor match still scores 1.00 at the top. If nothing fits, re-query with different terms; raising `limit` only appends a tail and never reorders the results above it.
 
-2. **Retrieve before relying on a result** — a result carries a snippet, which is a lead, not evidence. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet.
+2. **Retrieve before relying on a result** — a result carries a snippet, which is a lead, not evidence. Fetch what you intend to use with `mcp__memory-loop__multi_get` (or `get` for one document) and read it. Never quote, summarise, or act on a memory you have only seen as a snippet. A memory describes the code when it was captured, possibly on another branch: where the code you read disagrees, the code wins — say so rather than following the memory, and correct it through continuous-learning.
 
    ```
    mcp__memory-loop__get(file: "memories/foo.md")        # or file: "#docid" from a query hit

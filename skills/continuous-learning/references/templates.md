@@ -2,6 +2,8 @@
 
 Template structures for the continuous-learning skill. Load this when creating or updating memories. Capture Rules, `Applies to:` derivation, and Staleness rules live in [SKILL.md](../SKILL.md) — this file is templates only.
 
+When a memory's claim holds only on an unmerged branch, add `**Pending:** <what must merge>` on the line after `Applies to:` (SKILL.md, Step 4 Check 3).
+
 ## Learning Memory Template
 
 ```markdown
