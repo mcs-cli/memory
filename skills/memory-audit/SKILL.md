@@ -117,7 +117,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Use `Glob` to verify that referenced files or modules still exist.
 - If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
-- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, or the grep may have matched only the memory's own text. Where you cannot confirm a symbol in current source, that is the UPDATE-uncertain verdict, not DROP: say in the rationale what you could not confirm, and let the user decide.
+- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, the grep may have matched only the memory's own text, or the search may not have run at all — confirm its exit status rather than discarding stderr. When a claim does not match current source, list the remote branches with `git rev-parse --symbolic --remotes`, then `git grep` the symbol across them in a separate call, without fetching. A hit outside the default branch is unmerged work, not staleness: name the branch in the rationale and ask whether it is still in flight (UPDATE to add `Pending:`) or abandoned. Where you still cannot confirm a symbol, that is the UPDATE-uncertain verdict, not DROP: say in the rationale what you could not confirm, and let the user decide.
 
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
@@ -174,6 +174,8 @@ The categories below are the recurring concrete shapes of B.1 (forcing-function)
 
 > **Stay at project root.** Do not `cd` into `.claude/memories/` (or any subdirectory) at any point during the audit. Codebase fact-checks (Grep/Glob/Bash) need cwd at the project root — running them from inside `.claude/memories/` resolves patterns against memory files instead of project source, silently passing fact-checks that should fail. Reference memory files by full path (e.g. `.claude/memories/<file>.md`).
 
+> **Verdicts are not delegated.** Sub-agents may gather facts for a batch — each memory's claims marked found, missing, or contradicted, with evidence — but never KEEP/UPDATE/DROP, a category, or a rationale; say so in their prompt. Read every memory yourself and reach each verdict here: a verdict handed over in writing anchors whoever reviews it.
+
 > **Scope.** Default scope is every memory in `<project>/.claude/memories/`. The user may scope narrower: by category (`learning_*` only), by age (older than N months), or by `Applies to:` (only memories tagging this repo). Honor the requested scope; report the count covered vs. total.
 
 ### Step 1: Inventory
@@ -191,32 +193,35 @@ If the directory is missing or empty, report the situation (specify whether it d
 **Fact-check first, verdict second.** Before producing the verdict table for a batch, run a single grep pass against the codebase for the central claims (symbol names, file paths, type names) referenced across the batch. Verdicts that rest on unverified claims are guesses dressed up as analysis. Specifically:
 - Grep for every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
 - Spot-check any line numbers and historical line counts; flag stale ones for UPDATE.
+- Read each memory's `Related:` entries, and search the KB on its topic, before judging duplication or contradiction (C.2) — an overlap found while editing arrives after the verdict it should have changed.
 - Watch for `Applies to:` typos (e.g. `mcs-2` when the project is `mcs`) — quick one-line fixes.
 - Check memories carrying a `**Pending:**` line against the default branch first (resolve the ref as capture's Check 3 does). Merged → UPDATE to the merged state: remove the statement it superseded, the conditional phrasing, and the `Pending:` line. Still in flight → leave it. Abandoned → UPDATE to remove the conditional part, or DROP if nothing else remains.
 
 Read memories in batches (10-15 at a time) and produce a verdict table for each batch:
 
 ```
-| # | File | Verdict | Rationale |
-|---|------|---------|-----------|
-| 1 | learning_background_task_watchdog.md | KEEP | Project-specific debugging discovery; future sessions act on the avoidance pattern (B.1) |
-| 2 | learning_cli_tool_flags.md | DROP | Generic third-party CLI reference, no project anchor (A.1) |
-| 3 | learning_auth_cache_bug.md | UPDATE | Problem section names an engineer — strip the identifier, keep the symptom (A.2) |
-| 4 | decision_codestyle_tabs.md | DROP | Personal preference with no lint rule, formatter config, or team agreement (A.3) |
-| 5 | decision_codestyle_naming.md | UPDATE | Convention still valid but example uses old API (C.4) |
+| # | File | Verdict | Drives | Rationale |
+|---|------|---------|--------|-----------|
+| 1 | learning_background_task_watchdog.md | KEEP | Moves long work off the watchdog-timed thread instead of raising the timeout | Project-specific debugging discovery (B.1) |
+| 2 | learning_cli_tool_flags.md | DROP | — | Generic third-party CLI reference, no project anchor (A.1) |
+| 3 | learning_auth_cache_bug.md | UPDATE | Clears the auth cache on account switch, which the code does not signal | Problem section names an engineer — strip the identifier, keep the symptom (A.2) |
+| 4 | decision_codestyle_tabs.md | DROP | — | Personal preference with no lint rule, formatter config, or team agreement (A.3) |
+| 5 | decision_codestyle_naming.md | UPDATE | Names new types by the convention the formatter cannot enforce | Convention still valid but example uses old API (C.4) |
 ```
 
 **Verdict definitions:**
 
-- **KEEP** — Memory is relevant, actionable, well-structured, and not duplicated. No changes needed.
+- **KEEP** — Memory is relevant, actionable, well-structured, and not duplicated. No changes needed. **Drives** names what a future session would do differently because it exists; "claims verified" is a fact-check, not an answer (B.1).
 - **DROP** — Memory is stale, duplicated, generic, or no longer applicable. Recommend deletion.
 - **UPDATE** — Memory has value but needs fixes: rename to follow conventions, merge with another memory, refresh stale references, or improve structure.
 
-For UPDATE verdicts, briefly describe what needs to change.
+For UPDATE verdicts, briefly describe what needs to change, and fill **Drives** for the memory *after* the fix. Apply the strip-the-anchors test to what the fix leaves: an UPDATE that trims narrative or stale numbers off a generic core is a DROP.
 
 ### Step 3: User Review — HARD STOP
 
 **This is a blocking gate. After printing the verdict table, stop. Do not call any tool. Do not start the next batch. Do not run any `Edit`, `Write`, `Bash(rm)`, or `Bash(mv)`. Wait for the user's reply.**
+
+If a hook propagates memory changes (e.g. an autopush on turn end), say so with the table: approving the batch publishes it.
 
 The user must explicitly respond before you do anything else. Acceptable signals to proceed:
 - Explicit approval ("approved," "go ahead," "looks good," "yes," "proceed").
@@ -229,6 +234,8 @@ Things that are **not** approval:
 - A previous batch's approval — approval is per-batch, never carried forward.
 - A general "do an audit" instruction at the start of the session — that authorizes the audit, not any specific verdict.
 
+**Calibration stop.** When the audit runs past two batches, after executing the second one and before assessing the third, list every KEEP you proposed so far — not memories the user kept by overriding a DROP — with the strongest case for dropping it, and wait for the user. Leniency is invisible from inside a batch; this is where it gets challenged.
+
 If the user goes quiet after a batch, do not move on. End the turn. The user resumes when ready.
 
 Respect every override without arguing — the user knows their workflow better than any heuristic. If you disagree with an override, note it once for the record and apply the override anyway.
@@ -237,14 +244,14 @@ Respect every override without arguing — the user knows their workflow better 
 
 Run only after Step 3 has produced an explicit approval (or per-item decisions) for *this* batch. Apply the user's decisions, not the originally proposed verdicts when they differ.
 
-- **DROP**: Delete the file with `Bash(rm <path>)`
+- **DROP**: Re-read the file and confirm the rationale still holds — for a "covered by X" DROP, that X actually carries the content — then delete it with `Bash(rm <path>)`. If it no longer holds, tell the user before deleting — the approval rested on that rationale.
 - **UPDATE (rename)**: Rename with `Bash(mv <old> <new>)`
 - **UPDATE (content)**: Use `Edit` or `Write` to update the file. Rewrite a contradicted statement where it stands rather than appending a correction, then re-read the whole file to catch a broken splice.
 - **UPDATE (merge)**: Create the merged file, then delete the originals
 - **UPDATE (uncertain)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
 - **Stop at the filesystem.** Never `git add`, commit, or push memory changes — a KB may be tracked in the project's own repo, kept in a separate repo with its own propagation rules, or gitignored and purely local.
 
-Report what was done after each batch.
+Report what was done after each batch. When a later batch contradicts a memory an earlier batch already handled, reopen that memory with the user rather than letting the earlier verdict stand.
 
 ### Step 5: Summary
 
@@ -272,4 +279,4 @@ Knowledge base reduced from 42 → 34 files.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
 - **Apply criteria with teeth, not deference.** Past audits drifted into KEEP-by-default because each memory had *some* tie to the project. The forcing-function test (B.1) is the correction: KEEP requires identifying behavior the memory drives, not just absence of error. When the DROP categories above match, call DROP — don't soften it to UPDATE or stash in KEEP "to be safe."
 - **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job. This is about doubt over a memory's *value*. Doubt over a *fact you could not check* is different — an unverified claim is a reason to ask, not to delete.
-- **End-of-audit check for broken cross-links.** After DROPs land, grep `Related:` / `References:` lines for any pointer to a deleted filename and clean those up — broken refs accumulate silently otherwise.
+- **End-of-audit check for broken cross-links.** After DROPs and renames land, grep every memory's full text — not only `Related:` / `References:` lines — for the old filenames. Remove the pointers — broken refs accumulate silently otherwise. Where prose leaned on the dropped memory ("see the related memory"), propose the rewrite as an UPDATE and wait for approval like any other.
