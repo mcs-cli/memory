@@ -37,15 +37,19 @@ export function gateFixture(t: TestContext, mode = "enforce") {
   const state = `${f.project}/.claude/.kb-gate`;
   const log = `${f.project}/.claude/.kb-gate.log`;
   const event = (hook_event_name: string, extra = {}) => f.run(script, { hook_event_name, session_id: "session", ...extra });
-  const turn = () => event("UserPromptSubmit");
+  const turn = (prompt = "do the thing") => event("UserPromptSubmit", { prompt });
   const search = (input: unknown = { query: "some topic" }) => event("PostToolUse", { tool_input: input });
   const spawn = (prompt = "find the thing", subagent_type = "Explore", agent_id = "") => event("PreToolUse", { agent_id, tool_input: { subagent_type, prompt } });
+  const skill = (name = "continuous-learning") => event("PostToolUse", { tool_name: "Skill", tool_input: { skill: name } });
+  const write = ({ file_path = `${f.project}/.claude/memories/learning_x.md`, agent_id = "", tool_name = "Write" } = {}) => event("PreToolUse", { tool_name, agent_id, tool_input: { file_path, content: "x" } });
   const lastLog = () => JSON.parse(readFileSync(log, "utf8").trim().split("\n").at(-1)!);
-  return { ...f, script, state, log, event, turn, search, spawn, lastLog };
+  return { ...f, script, state, log, event, turn, search, spawn, skill, write, lastLog };
 }
 
-export function denied(output: string): void {
-  assert.equal(JSON.parse(output).hookSpecificOutput.permissionDecision, "deny");
+export function denied(output: string): { permissionDecisionReason: string } {
+  const decision = JSON.parse(output).hookSpecificOutput;
+  assert.equal(decision.permissionDecision, "deny");
+  return decision;
 }
 
 export function qmdStub(work: string): string {

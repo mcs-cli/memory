@@ -23,7 +23,7 @@ for (const type of ["commonjs", "module"]) {
     const f = fixture(t);
     writeFileSync(`${f.project}/package.json`, JSON.stringify({ type }));
     const hooks = manifest.split(/^  - id: /m).filter(component => /\n    hookEvent:/.test(component));
-    assert.equal(hooks.length, 7);
+    assert.equal(hooks.length, 9);
     assert.match(manifest, /hook:\n      source: hooks\/shared.mts\n      destination: shared.mts/);
     const installed = `${f.project}/.claude/hooks/memory`;
     mkdirSync(installed, { recursive: true });
@@ -41,6 +41,8 @@ for (const type of ["commonjs", "module"]) {
     }
     assert.match(manifest, /hookMatcher: "Agent\|Task"/);
     assert.match(manifest, /hookMatcher: "mcp__memory-loop__query"/);
+    assert.match(manifest, /hookMatcher: "Skill"/);
+    assert.match(manifest, /hookMatcher: "Write\|Edit\|NotebookEdit"/);
     assert.equal((manifest.match(/hookAsync: true/g) ?? []).length, 2);
     assert.equal((manifest.match(/hookTimeout: 120/g) ?? []).length, 2);
   });

@@ -251,11 +251,12 @@ components:
       destination: sync-memories.mts
 
   # ── KB-first delegation ─────────────────────────────────────────────────
-  # Four registrations of one dispatcher script, which branches on
-  # `hook_event_name`. Together they keep KB lookups ahead of delegated discovery,
-  # so sub-agents don't rediscover what a memory already recorded. Matchers stay
-  # broad on purpose — which agent types count as "discovery" is decided in one
-  # place, by `GATED_AGENTS` in the script.
+  # Several registrations of one dispatcher script, which branches on
+  # `hook_event_name` and then `tool_name`. Together they keep KB lookups ahead of delegated discovery,
+  # so sub-agents don't rediscover what a memory already recorded, and keep memory
+  # writes behind the skills that run the save checks. Matchers stay broad on
+  # purpose — which agent types count as "discovery" is decided in one place, by
+  # `GATED_AGENTS` in the script.
   - id: hook-kb-gate-turn
     displayName: KB gate — turn boundary
     description: Marks each new prompt so the KB check is required again per turn
@@ -307,6 +308,26 @@ components:
         name: "PreToolUse hook registered"
         section: Hooks
         event: PreToolUse
+
+  - id: hook-kb-gate-skill
+    displayName: KB gate — record memory skills
+    description: Records continuous-learning and memory-audit invocations so memory writes can be checked against them
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
+    hookEvent: PostToolUse
+    hookMatcher: "Skill"
+    hook:
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
+
+  - id: hook-kb-gate-memory-write
+    displayName: KB gate — check memory writes
+    description: Blocks writes to .claude/memories/ unless a memory skill is active
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
+    hookEvent: PreToolUse
+    hookMatcher: "Write|Edit|NotebookEdit"
+    hook:
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
 
   - id: hook-kb-subagent-brief
     displayName: Sub-agent KB brief
