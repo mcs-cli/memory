@@ -42,8 +42,9 @@ export function gateFixture(t: TestContext, mode = "enforce") {
   const spawn = (prompt = "find the thing", subagent_type = "Explore", agent_id = "") => event("PreToolUse", { agent_id, tool_input: { subagent_type, prompt } });
   const skill = (name = "continuous-learning") => event("PostToolUse", { tool_name: "Skill", tool_input: { skill: name } });
   const write = ({ file_path = `${f.project}/.claude/memories/learning_x.md`, agent_id = "", tool_name = "Write" } = {}) => event("PreToolUse", { tool_name, agent_id, tool_input: { file_path, content: "x" } });
+  const bash = (command: string, agent_id = "") => event("PreToolUse", { tool_name: "Bash", agent_id, tool_input: { command } });
   const lastLog = () => JSON.parse(readFileSync(log, "utf8").trim().split("\n").at(-1)!);
-  return { ...f, script, state, log, event, turn, search, spawn, skill, write, lastLog };
+  return { ...f, script, state, log, event, turn, search, spawn, skill, write, bash, lastLog };
 }
 
 export function denied(output: string): { permissionDecisionReason: string } {

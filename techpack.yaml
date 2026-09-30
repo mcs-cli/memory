@@ -321,10 +321,10 @@ components:
 
   - id: hook-kb-gate-memory-write
     displayName: KB gate — check memory writes
-    description: Blocks writes to .claude/memories/ unless a memory skill is active
+    description: Blocks writes, deletes and moves in .claude/memories/ unless a memory skill is active
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PreToolUse
-    hookMatcher: "Write|Edit|NotebookEdit"
+    hookMatcher: "Write|Edit|NotebookEdit|Bash"
     hook:
       source: hooks/kb-gate.mts
       destination: kb-gate.mts

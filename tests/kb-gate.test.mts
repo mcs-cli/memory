@@ -246,3 +246,36 @@ test("off skips memory writes too", t => {
   assert.equal(f.write(), "");
   assert.equal(existsSync(f.state), false);
 });
+
+test("deleting or moving memories through Bash needs memory-audit", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill();
+  assert.match(denied(f.bash("rm .claude/memories/learning_x.md")).permissionDecisionReason, /memory-audit/);
+  assert.equal(f.lastLog().phase, "memory_delete");
+  denied(f.bash("git -C .claude/.memories-repo rm -- memories/learning_x.md"));
+  denied(f.bash("mv .claude/memories/a.md .claude/memories/b.md"));
+  f.turn();
+  f.skill("memory-audit");
+  f.turn("approved");
+  assert.equal(f.bash("rm .claude/memories/learning_x.md"), "");
+  assert.equal(f.lastLog().skill, "memory-audit");
+});
+
+test("unrelated Bash commands pass without evaluation", t => {
+  const f = gateFixture(t);
+  f.turn();
+  const before = readFileSync(f.log, "utf8");
+  for (const command of ["ls .claude/memories", "rm build/tmp.txt", "docker run --rm memories-image", "grep -rn memories . | wc -l", "cat .claude/memories/a.md | grep rm"]) {
+    assert.equal(f.bash(command), "");
+  }
+  assert.equal(readFileSync(f.log, "utf8"), before);
+});
+
+test("sub-agents cannot delete memories even under memory-audit", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill("memory-audit");
+  denied(f.bash("rm .claude/memories/learning_x.md", "agent-3"));
+  assert.equal(f.lastLog().skip_reason, "subagent");
+});

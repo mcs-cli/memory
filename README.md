@@ -106,7 +106,7 @@ During installation, the pack asks how strictly it should enforce searching the 
 
 `enforce` cannot wedge a session: denials are budgeted per turn, so a spawn eventually proceeds even if the requirement is never satisfied. Every mode except `off` also briefs discovery sub-agents at startup and records decisions in `.claude/.kb-gate.log`.
 
-Writes to `.claude/memories/` are gated separately, and in every mode except `off` they are denied unless a memory skill is active. That means `continuous-learning` in the same turn, or `memory-audit` earlier in the session. This keeps every save behind the skill's search and pre-write checks.
+Writes to `.claude/memories/` are gated separately, and in every mode except `off` they are denied unless a memory skill is active. That means `continuous-learning` in the same turn, or `memory-audit` earlier in the session. Deleting or moving a memory from the shell is allowed only under `memory-audit`. This keeps every save behind the skill's search and pre-write checks.
 
 To change the mode, run `mcs sync` again. The selection is baked into the installed hook rather than read from a runtime setting.
 

@@ -42,7 +42,7 @@ for (const type of ["commonjs", "module"]) {
     assert.match(manifest, /hookMatcher: "Agent\|Task"/);
     assert.match(manifest, /hookMatcher: "mcp__memory-loop__query"/);
     assert.match(manifest, /hookMatcher: "Skill"/);
-    assert.match(manifest, /hookMatcher: "Write\|Edit\|NotebookEdit"/);
+    assert.match(manifest, /hookMatcher: "Write\|Edit\|NotebookEdit\|Bash"/);
     assert.equal((manifest.match(/hookAsync: true/g) ?? []).length, 2);
     assert.equal((manifest.match(/hookTimeout: 120/g) ?? []).length, 2);
   });

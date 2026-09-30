@@ -14,6 +14,7 @@ const GATED_AGENTS = ["Explore", "general-purpose", "Plan"];
 const MEMORY_SKILL_SCOPES: Record<string, "turn" | "session"> = { "continuous-learning": "turn", "memory-audit": "session" };
 const MEMORY_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
 const MAX_MEMORY_WRITE_DENIALS_PER_TURN = 3;
+const MEMORY_DELETE = /(?:^|[^\w-])(?:rm|unlink|mv)(?=\s)/;
 const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
 
 function memorySkill(name: unknown): string | undefined {
@@ -40,6 +41,9 @@ function gate(): void {
   const isMemoryWrite = event === "PreToolUse" && MEMORY_WRITE_TOOLS.includes(payload.tool_name);
   const target = payload.tool_input?.file_path || payload.tool_input?.notebook_path || "";
   if (isMemoryWrite && !`${resolve(target)}\n${realPath(resolve(target))}`.includes("memories")) return;
+  const command = String(payload.tool_input?.command ?? "");
+  const isMemoryDelete = event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
+  if (event === "PreToolUse" && payload.tool_name === "Bash" && !isMemoryDelete) return;
 
   const root = projectRoot();
   const memories = `${root}/.claude/memories`;
@@ -149,37 +153,43 @@ mcp__memory-loop__query.
     return;
   }
 
-  if (isMemoryWrite) {
-    const lexical = resolve(root, target);
-    const resolved = realPath(lexical);
-    const memoriesReal = attempt(() => realpathSync(memories)) ?? memories;
-    const inside = (path: string, directory: string) => path.startsWith(`${directory}/`);
-    if (!inside(lexical, memories) && !inside(resolved, memoriesReal)) return;
-    function logWrite(decision: string, extra = {}): void {
-      logEvent({ phase: "memory_write", tool: payload.tool_name, target: resolved, agent_type: agentType, decision, ...extra });
+  if (isMemoryWrite || isMemoryDelete) {
+    const phase = isMemoryWrite ? "memory_write" : "memory_delete";
+    let subject = command.slice(0, 200);
+    if (isMemoryWrite) {
+      const lexical = resolve(root, target);
+      subject = realPath(lexical);
+      const memoriesReal = attempt(() => realpathSync(memories)) ?? memories;
+      const inside = (path: string, directory: string) => path.startsWith(`${directory}/`);
+      if (!inside(lexical, memories) && !inside(subject, memoriesReal)) return;
+    }
+    function logMemory(decision: string, extra = {}): void {
+      logEvent({ phase, tool: payload.tool_name, target: subject, agent_type: agentType, decision, ...extra });
     }
     if (agentId) {
-      logWrite("deny", { skip_reason: "subagent" });
-      output({ permissionDecision: "deny", permissionDecisionReason: "Sub-agents cannot write to .claude/memories/. Report the proposed memory change back instead; the main thread saves it through Skill(continuous-learning), which runs the search and pre-write checks." });
+      logMemory("deny", { skip_reason: "subagent" });
+      output({ permissionDecision: "deny", permissionDecisionReason: "Sub-agents cannot change .claude/memories/. Report the proposed memory change back instead; the main thread applies it through the continuous-learning or memory-audit skill, which run the search, pre-write and approval checks." });
       return;
     }
-    const skill = rows(skillsFile)?.find(([at, name]) => MEMORY_SKILL_SCOPES[name!] === "session" || (MEMORY_SKILL_SCOPES[name!] === "turn" && Number(at) === turn))?.[1];
+    const skill = rows(skillsFile)?.find(([at, name]) => MEMORY_SKILL_SCOPES[name!] === "session" || (isMemoryWrite && MEMORY_SKILL_SCOPES[name!] === "turn" && Number(at) === turn))?.[1];
     if (skill) {
-      logWrite("allow", { skill });
+      logMemory("allow", { skill });
       return;
     }
-    const spent = denials("memory_write");
+    const spent = denials(phase);
     if (spent === undefined) {
-      logWrite("allow", { skip_reason: "budget_unreadable" });
+      logMemory("allow", { skip_reason: "budget_unreadable" });
       return;
     }
     if (spent.length >= MAX_MEMORY_WRITE_DENIALS_PER_TURN) {
-      logWrite("allow", { skip_reason: "budget_turn", denials_turn: spent.length });
+      logMemory("allow", { skip_reason: "budget_turn", denials_turn: spent.length });
       return;
     }
-    append(denialsFile, [turn, "memory_write"]);
-    logWrite("deny", { denials_turn: spent.length + 1 });
-    output({ permissionDecision: "deny", permissionDecisionReason: "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them." });
+    append(denialsFile, [turn, phase]);
+    logMemory("deny", { denials_turn: spent.length + 1 });
+    output({ permissionDecision: "deny", permissionDecisionReason: isMemoryWrite
+      ? "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them."
+      : "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning)." });
     return;
   }
 
