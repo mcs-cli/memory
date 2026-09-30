@@ -1,5 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { attempt, isDirectory, projectRoot, read } from "./shared.mts";
 
 const MODE: string = "__KB_GATE_MODE__";
@@ -10,6 +11,20 @@ const LOG_KEEP_LINES = 1000;
 const STATE_MAX_AGE_DAYS = 7;
 const KB_MARKER = "KB context:";
 const GATED_AGENTS = ["Explore", "general-purpose", "Plan"];
+const MEMORY_SKILL_SCOPES: Record<string, "turn" | "session"> = { "continuous-learning": "turn", "memory-audit": "session" };
+const MEMORY_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
+const MAX_MEMORY_WRITE_DENIALS_PER_TURN = 3;
+const MEMORY_DELETE = /(?:^|[^\w-])(?:rm|unlink|mv)(?=\s)/;
+const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
+
+function memorySkill(name: unknown): string | undefined {
+  const skill = String(name ?? "").replace(/^\//, "").split(":").at(-1) ?? "";
+  return Object.hasOwn(MEMORY_SKILL_SCOPES, skill) ? skill : undefined;
+}
+
+function realPath(path: string): string {
+  return attempt(() => realpathSync(path)) ?? join(attempt(() => realpathSync(dirname(path))) ?? dirname(path), basename(path));
+}
 
 function gate(): void {
   if (MODE === "off") return;
@@ -21,6 +36,14 @@ function gate(): void {
   const hadKBBlock = (payload.tool_input?.prompt || "").includes(KB_MARKER);
   if (event === "SubagentStart" && !GATED_AGENTS.includes(agentType)) return;
   if (!["UserPromptSubmit", "PostToolUse", "PreToolUse", "SubagentStart"].includes(event)) return;
+  const isSkillCall = event === "PostToolUse" && payload.tool_name === "Skill";
+  if (isSkillCall && !memorySkill(payload.tool_input?.skill)) return;
+  const isMemoryWrite = event === "PreToolUse" && MEMORY_WRITE_TOOLS.includes(payload.tool_name);
+  const target = payload.tool_input?.file_path || payload.tool_input?.notebook_path || "";
+  if (isMemoryWrite && !`${resolve(target)}\n${realPath(resolve(target))}`.includes("memories")) return;
+  const command = String(payload.tool_input?.command ?? "");
+  const isMemoryDelete = event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
+  if (event === "PreToolUse" && payload.tool_name === "Bash" && !isMemoryDelete) return;
 
   const root = projectRoot();
   const memories = `${root}/.claude/memories`;
@@ -29,6 +52,7 @@ function gate(): void {
   const turnFile = `${state}/${session}.turn`;
   const queriesFile = `${state}/${session}.queries`;
   const denialsFile = `${state}/${session}.denials`;
+  const skillsFile = `${state}/${session}.skills`;
   const turnText = (attempt(() => read(turnFile)) ?? "").split("\n")[0]?.trim() ?? "";
   const turn = /^\d+$/.test(turnText) ? Number(turnText) : 0;
 
@@ -38,6 +62,22 @@ function gate(): void {
 
   function output(fields: Record<string, string>): void {
     process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, ...fields } })}\n`);
+  }
+
+  function rows(file: string): string[][] | undefined {
+    const content = existsSync(file) ? attempt(() => read(file)) : "";
+    return content?.split("\n").filter(Boolean).map(line => line.split("\t"));
+  }
+
+  function denials(phase: string): string[][] | undefined {
+    return rows(denialsFile)?.filter(fields => Number(fields[0]) === turn && fields[1] === phase);
+  }
+
+  function append(file: string, fields: (string | number)[]): void {
+    attempt(() => {
+      mkdirSync(state, { recursive: true });
+      appendFileSync(file, `${fields.join("\t")}\n`);
+    });
   }
 
   function sweep(directory: string): void {
@@ -65,6 +105,17 @@ function gate(): void {
     attempt(() => writeFileSync(denialsFile, ""));
     attempt(() => writeFileSync(turnFile, `${turn + 1}\n`));
     logEvent({ decision: "turn_start", turn: turn + 1 });
+    for (const [, skill] of String(payload.prompt ?? "").matchAll(SLASH_SKILL)) {
+      append(skillsFile, [turn + 1, skill!]);
+      logEvent({ decision: "recorded_skill", skill, source: "prompt" });
+    }
+    return;
+  }
+
+  if (isSkillCall) {
+    const skill = memorySkill(payload.tool_input.skill)!;
+    append(skillsFile, [turn, skill]);
+    logEvent({ decision: "recorded_skill", skill, source: "tool" });
     return;
   }
 
@@ -102,6 +153,46 @@ mcp__memory-loop__query.
     return;
   }
 
+  if (isMemoryWrite || isMemoryDelete) {
+    const phase = isMemoryWrite ? "memory_write" : "memory_delete";
+    let subject = command.slice(0, 200);
+    if (isMemoryWrite) {
+      const lexical = resolve(root, target);
+      subject = realPath(lexical);
+      const memoriesReal = attempt(() => realpathSync(memories)) ?? memories;
+      const inside = (path: string, directory: string) => path.startsWith(`${directory}/`);
+      if (!inside(lexical, memories) && !inside(subject, memoriesReal)) return;
+    }
+    function logMemory(decision: string, extra = {}): void {
+      logEvent({ phase, tool: payload.tool_name, target: subject, agent_type: agentType, decision, ...extra });
+    }
+    if (agentId) {
+      logMemory("deny", { skip_reason: "subagent" });
+      output({ permissionDecision: "deny", permissionDecisionReason: "Sub-agents cannot change .claude/memories/. Report the proposed memory change back instead; the main thread applies it through the continuous-learning or memory-audit skill, which run the search, pre-write and approval checks." });
+      return;
+    }
+    const skill = rows(skillsFile)?.find(([at, name]) => MEMORY_SKILL_SCOPES[name!] === "session" || (isMemoryWrite && MEMORY_SKILL_SCOPES[name!] === "turn" && Number(at) === turn))?.[1];
+    if (skill) {
+      logMemory("allow", { skill });
+      return;
+    }
+    const spent = denials(phase);
+    if (spent === undefined) {
+      logMemory("allow", { skip_reason: "budget_unreadable" });
+      return;
+    }
+    if (spent.length >= MAX_MEMORY_WRITE_DENIALS_PER_TURN) {
+      logMemory("allow", { skip_reason: "budget_turn", denials_turn: spent.length });
+      return;
+    }
+    append(denialsFile, [turn, phase]);
+    logMemory("deny", { denials_turn: spent.length + 1 });
+    output({ permissionDecision: "deny", permissionDecisionReason: isMemoryWrite
+      ? "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them."
+      : "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning)." });
+    return;
+  }
+
   if (agentId) {
     logEvent({ decision: "skip", skip_reason: "nested_subagent" });
     return;
@@ -133,20 +224,19 @@ mcp__memory-loop__query.
   ].join(", and ");
 
   if (MODE === "enforce") {
-    const content = existsSync(denialsFile) ? attempt(() => read(denialsFile)) : "";
-    if (content === undefined) {
+    const discovery = denials("discovery");
+    if (discovery === undefined) {
       logDecision(false, "allow", { skip_reason: "budget_unreadable" });
       return;
     }
-    const denials = content.split("\n").map(line => line.split("\t")).filter(fields => Number(fields[0]) === turn && fields[1] === "discovery");
-    const denialsTurn = denials.length;
-    const denialsState = denials.filter(fields => (Number.parseFloat(fields[2] ?? "") || 0) === queries).length;
+    const denialsTurn = discovery.length;
+    const denialsState = discovery.filter(fields => (Number.parseFloat(fields[2] ?? "") || 0) === queries).length;
     const spent = denialsTurn >= MAX_DENIALS_PER_TURN ? "budget_turn" : denialsState >= MAX_DENIALS_PER_STATE ? "budget_no_progress" : "";
     if (spent) {
       logDecision(false, "allow", { skip_reason: spent, denials_turn: denialsTurn, denials_state: denialsState });
       return;
     }
-    attempt(() => appendFileSync(denialsFile, `${turn}\tdiscovery\t${queries}\n`));
+    append(denialsFile, [turn, "discovery", queries]);
     logDecision(false, "deny", { denials_turn: denialsTurn + 1, denials_state: denialsState + 1 });
     output({ permissionDecision: "deny", permissionDecisionReason: `Prerequisite missing: ${missing}. Search the KB with mcp__memory-loop__query first, then re-issue this exact call with a "${KB_MARKER}" block (1-5 bullets of findings, or "${KB_MARKER} none relevant.") at the top of the prompt. Spawning several agents at once: write the findings to a scratchpad file and open each prompt with "${KB_MARKER} see <path>" instead of repeating them. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch.` });
     return;

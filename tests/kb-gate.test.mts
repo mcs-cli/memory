@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { denied, gateFixture, root } from "./helpers.mts";
 
@@ -156,4 +156,126 @@ test("an unavailable state directory fails open", t => {
   writeFileSync(f.state, "blocked");
   assert.equal(f.turn(), "");
   assert.equal(f.search(), "");
+});
+
+test("memory writes need continuous-learning in the same turn", t => {
+  const f = gateFixture(t);
+  f.turn();
+  denied(f.write());
+  assert.equal(f.lastLog().phase, "memory_write");
+  f.skill();
+  assert.equal(f.write(), "");
+  assert.equal(f.write({ tool_name: "Edit" }), "");
+  assert.equal(f.lastLog().decision, "allow");
+  f.turn();
+  assert.match(denied(f.write()).permissionDecisionReason, /Invoke Skill\(continuous-learning\)/);
+});
+
+test("memory-audit authorizes writes for the rest of the session", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill("memory-audit");
+  f.turn("approved");
+  f.turn("apply batch 2");
+  assert.equal(f.write(), "");
+  assert.equal(f.lastLog().skill, "memory-audit");
+});
+
+test("slash commands anywhere in the prompt count; paths and other skills do not", t => {
+  const f = gateFixture(t);
+  f.turn("/continuous-learning");
+  assert.equal(f.write(), "");
+  f.turn("fix the parser, then /memory:continuous-learning please");
+  assert.equal(f.write(), "");
+  f.turn("<command-message>continuous-learning</command-message>\n<command-name>/continuous-learning</command-name>");
+  assert.equal(f.write(), "");
+  f.turn("read skills/continuous-learning/SKILL.md");
+  denied(f.write());
+  f.turn();
+  f.skill("simplify");
+  denied(f.write());
+  f.skill("memory:continuous-learning");
+  assert.equal(f.write(), "");
+});
+
+test("writes through a symlinked memories dir are gated; outside paths pass silently", t => {
+  const f = gateFixture(t);
+  rmSync(`${f.project}/.claude/memories`, { recursive: true });
+  mkdirSync(`${f.work}/repo/memories`, { recursive: true });
+  symlinkSync(`${f.work}/repo/memories`, `${f.project}/.claude/memories`);
+  f.turn();
+  denied(f.write({ file_path: `${f.work}/repo/memories/decision_y.md` }));
+  denied(f.write({ file_path: `${f.project}/.claude/memories/decision_y.md`, tool_name: "NotebookEdit" }));
+  const before = readFileSync(f.log, "utf8");
+  assert.equal(f.write({ file_path: `${f.project}/src/app.ts` }), "");
+  assert.equal(f.write({ file_path: `${f.project}/.claude/memories-notes.md` }), "");
+  assert.equal(readFileSync(f.log, "utf8"), before);
+});
+
+test("sub-agents are always denied memory writes", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill("memory-audit");
+  for (let i = 0; i < 5; i++) denied(f.write({ agent_id: "agent-7" }));
+  assert.equal(f.lastLog().skip_reason, "subagent");
+});
+
+test("the memory-write budget releases after three denials, independent of discovery", t => {
+  const f = gateFixture(t);
+  f.turn();
+  denied(f.spawn());
+  for (let i = 0; i < 3; i++) denied(f.write());
+  assert.equal(f.write(), "");
+  assert.equal(f.lastLog().skip_reason, "budget_turn");
+  denied(f.spawn());
+  f.turn();
+  denied(f.write());
+});
+
+for (const mode of ["warn", "observe", "__KB_GATE_MODE__"]) {
+  test(`${mode} still denies memory writes`, t => {
+    const f = gateFixture(t, mode);
+    f.turn();
+    denied(f.write());
+  });
+}
+
+test("off skips memory writes too", t => {
+  const f = gateFixture(t, "off");
+  f.turn();
+  assert.equal(f.write(), "");
+  assert.equal(existsSync(f.state), false);
+});
+
+test("deleting or moving memories through Bash needs memory-audit", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill();
+  assert.match(denied(f.bash("rm .claude/memories/learning_x.md")).permissionDecisionReason, /memory-audit/);
+  assert.equal(f.lastLog().phase, "memory_delete");
+  denied(f.bash("git -C .claude/.memories-repo rm -- memories/learning_x.md"));
+  denied(f.bash("mv .claude/memories/a.md .claude/memories/b.md"));
+  f.turn();
+  f.skill("memory-audit");
+  f.turn("approved");
+  assert.equal(f.bash("rm .claude/memories/learning_x.md"), "");
+  assert.equal(f.lastLog().skill, "memory-audit");
+});
+
+test("unrelated Bash commands pass without evaluation", t => {
+  const f = gateFixture(t);
+  f.turn();
+  const before = readFileSync(f.log, "utf8");
+  for (const command of ["ls .claude/memories", "rm build/tmp.txt", "docker run --rm memories-image", "grep -rn memories . | wc -l", "cat .claude/memories/a.md | grep rm"]) {
+    assert.equal(f.bash(command), "");
+  }
+  assert.equal(readFileSync(f.log, "utf8"), before);
+});
+
+test("sub-agents cannot delete memories even under memory-audit", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill("memory-audit");
+  denied(f.bash("rm .claude/memories/learning_x.md", "agent-3"));
+  assert.equal(f.lastLog().skip_reason, "subagent");
 });
