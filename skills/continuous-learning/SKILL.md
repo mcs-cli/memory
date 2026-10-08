@@ -9,6 +9,7 @@ description: >
 allowed-tools:
   - Read
   - Glob
+  - Grep
   - WebSearch
   - Write(.claude/memories/**)
   - Edit(.claude/memories/**)
@@ -27,6 +28,8 @@ disallowed-tools: AskUserQuestion
 Evaluate reusable knowledge from work sessions and route it: codebase knowledge → `<project>/.claude/memories/`, environment/tool/instance config → suggest a `CLAUDE.local.md` section, public documentation → skip. Suggesting `CLAUDE.local.md` is a successful outcome, not a failure.
 
 > **Note:** `<project>` is the project root throughout this document: `git rev-parse --show-toplevel`, else `CLAUDE_PROJECT_DIR`, else the current working directory — the same order the memory hooks use. Run every command from there and never `cd` into `.claude/memories/` — the memories may live in a separate git repo, so `git` commands would silently answer for the wrong one. The `Applies to:` field inside memory content has its own semantics — see the **Applies to** subsection in [Step 4](#step-4-route-and-save).
+
+> **Without version control.** Every git step applies only when the relevant root — the project for code claims, the memories folder for history — is under version control. Otherwise check the working tree with Grep/Glob, skip `Pending:` handling, and say which you did. Without VCS the working tree is the only state, so a claim missing there is wrong, not pending.
 
 ## Memory Categories
 
@@ -77,9 +80,9 @@ Apply these rules at save time. A draft that fails any rule is not saved (or is 
 <!-- SYNC:capture-rules -->
 Every memory must satisfy all three rules.
 
-- **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify.
+- **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify. Every claim must also change how a session works in a project whose sessions read this KB. Listing another project in `Applies to:` does not make its internals relevant: knowledge of another project's internals is cut down to the conclusion that changes work in the reading project. A claim about another project counts as checked only if the session read that project's code, or an internal doc cited in `References:`.
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in narration of "who did what." Describe the artifact (the bug, the pattern, the decision), not who touched it. Identifiers age badly and add no signal even in a single-user KB.
-- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, session-level consensus all count), **or** already used consistently in the codebase. Codebase usage is the strongest evidence. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
+- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage alone does not make the pattern worth a memory, because the code already conveys it — unless new code could break it unnoticed. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
   - **Bad patterns present in the code** are handled by category, not by exclusion. If one engineer flags a pattern as bad without team ratification, the appropriate shape is a `learning_` warning (e.g. `learning_dont_use_X_because_Y`) — **only** when it carries trigger (*"when you use X in case Y…"*), symptom (*"…it leaks / races / drops data"*), and avoidance (*"use Z instead"*). If the team has agreed the pattern is bad and should be avoided or replaced, the team agreement itself makes it a `decision_` (e.g. `decision_architecture_deprecate_X`). Pure *"this should be refactored someday"* observations without that shape belong in the issue tracker.
 <!-- /SYNC -->
 
@@ -95,7 +98,7 @@ After completing any task, evaluate in two stages.
 - Did this require non-obvious investigation or debugging?
 - Was a choice made about architecture, patterns, or approach?
 - Is there an established project convention the code follows but does not make obvious?
-- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the current code or a mechanical check already drives the behavior → skip. The "Do Not Save" table cites this as `[Forcing-function]`.
+- **Forcing-function (hard gate):** without this memory, would a future session act differently in the project? If the current code or a mechanical check already drives the behavior → skip. It fails outright when the error or compiler message already names the cause, and for a "use X for Y" memory when X is already the dominant way the code does Y. The "Do Not Save" table cites this as `[Forcing-function]`.
 
 If the forcing-function gate fails, or no other prompt answers yes → skip. Otherwise continue to Stage B.
 
@@ -124,8 +127,10 @@ is a guess — and the cost of guessing wrong is a duplicate memory or a lost re
 Decide what to do, in this order of preference:
 
 1. **Knowledge is already captured.** Skip.
-2. **The new knowledge extends or refines an existing memory.** Prefer this: `Edit` the existing memory, following **Update existing** in Step 4. The KB stays lean and a stronger single memory beats two partial ones.
-3. **The content is too different to merge but still related.** Save a new memory and add a `Related:` cross-link to the neighbor. If the relationship is bidirectional, also `Edit` the neighbor to add a reciprocal `Related:` entry.
+2. **It shares a trigger with an existing memory** — one you read and judged on-topic, not merely a search hit. Fold it in, following **Update existing** in Step 4, or skip; when unsure, skip. If this session already saved or edited that memory, edit it again only to fix a contradiction.
+3. **It has a different trigger.** Save a new memory only if it passes Stage A on its own: would a future session holding only this text act differently? Otherwise skip. Link the neighbor with `Related:` in the new memory only; edit the neighbor only when it is wrong without the new memory.
+
+When one run yields several candidates, compare them with each other as well as with the KB: candidates that share a trigger are one memory. Each memory that survives runs every check on its own, with its own search and printed lines.
 
 Use `Related:` for memories that share root causes, build on each other, contradict each other, or supersede older decisions. Don't cross-link every vaguely overlapping memory.
 
@@ -157,6 +162,10 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 
 Run these checks as visible output before any `Write` to `<project>/.claude/memories/`, and on the added text before any `Edit`. Hidden reasoning is easy to skip; printed output is reviewable.
 
+For a new memory, first print what it changes — Stage A's answer, made visible:
+
+- **Drives:** what a future session does differently because this memory exists. *"Claims verified"* or a restatement of the content is not an answer. If two memories in one run print the same behavior, merge them.
+
 **Check 1: Strip-the-anchors (routing).**
 
 <!-- SYNC:strip-the-anchors -->
@@ -184,11 +193,11 @@ Under version control, verify the memory's central claim against the default bra
 
 - **Default branch:** `holds` | `pending (<what must merge>)` | `no VCS`
 
-**`pending` only when** you know the change is in flight, usually this session's own branch. A claim missing from the default branch with no such change is wrong, not pending — don't save it.
+**`pending` only when** the change is in flight and has a PR or ticket to name. A claim missing from the default branch with neither is wrong or not ready, not pending — don't save it.
 
-**How to write it:** phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <what must merge>` on the line after `Applies to:` — a ticket, a PR, or a short description of the change, never a branch name. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
+**How to write it:** phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <PR or ticket>` on the line after `Applies to:` — never a branch name or a description of the change. Record what stays true after the merge, not the surface of the unmerged API. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
 
-**Save (only after Checks 1 and 2 pass and Check 3 is printed):**
+**Save (only after Checks 1 and 2 pass and the Drives line and Check 3 are printed):**
 ```
 Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", content: "<structured markdown>")
 ```
@@ -196,8 +205,9 @@ Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", 
 **Update existing:**
 
 1. Run the checks on the added text. If Check 1 fails, route that text, not the memory.
-2. Rewrite a contradicted or superseded statement where it stands — a `Related:` note is not a correction. If Check 3 printed `pending`, keep the statement and add the conditional one beside it.
-3. If the memory carries a `Pending:` line whose change has since merged, fold it in with the same edit: remove the superseded statement, the conditional phrasing, and the `Pending:` line.
+2. Fold the new text into the section it belongs to, and rewrite a contradicted or superseded statement where it stands. Never append a section for a refinement or a correction — a `Related:` note is not a correction either. If Check 3 printed `pending`, keep the statement and add the conditional one beside it.
+3. Refresh the rest of the file in the same edit. If its `Pending:` change has merged, fold it in: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Check its backticked symbols with one `git grep` against the default branch, and its `Related:` targets for existence. Report a missing symbol or broken link rather than fixing or deleting it — removing content is the audit's job, after approval. Print one line:
+   - **Refresh:** `pending <PR or ticket> merged -> folded` | `pending open` | `no pending` | `pending n/a (no VCS)`; `symbols <held>/<total>` (missing ones named); `links ok` | `links broken: <names>`
 4. Re-read the whole file afterwards to catch a broken splice.
 
 ```
@@ -236,6 +246,8 @@ Anti-examples, generalized — do not create memories like these:
 | One-line rule that belongs in CLAUDE.md | A single-sentence convention with no Context / Options / Consequences | **[Scope]** If it fits in one bullet under "Conventions" in CLAUDE.md, put it there. A standalone memory file is overhead for content that cannot grow. |
 | Naming/prefix decision once enforced | "We kept the `External` prefix on adapter types" | **[Forcing-function]** Once the type system, lint, or formatter enforces it, the decision lives in the code. Future sessions read the code, not the memory. |
 | One-time bug fix self-evident in current code | "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity" | **[Forcing-function]** The fix is a small diff; the code reads correctly today. Save only if the bug class is recurring and the memory teaches the *avoidance pattern*, not the one fix. |
+| Description of code written this session | "What the new `ReportPublisher` chain emits and in which order", saved from the session that wrote it | **[Forcing-function]** Merged, the code explains itself; unmerged, it is not evidence (Rule 3). A trap found while writing it qualifies only with trigger, symptom, and avoidance. |
+| Fault in one engineer's environment | "Backend rejects signed requests because this machine's clock drifts with NTP blocked" | **[Rule 1]** Not project behavior, even with project anchors — it is that engineer's `CLAUDE.local.md` note. |
 | Research artifact for deferred or dormant work | "Cross-platform audit / options-considered for feature X (deferred indefinitely)" | **[Forcing-function]** Useful when the work resumes — but it belongs in a planning doc or `docs/`, not the memory KB. The KB is for things that change how a session works on the active codebase today. |
 
 When the underlying knowledge *is* salvageable, rewrite before saving:
