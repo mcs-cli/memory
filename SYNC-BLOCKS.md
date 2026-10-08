@@ -59,6 +59,34 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 
 ---
 
+## Block 4: Shapes that do not qualify
+
+Locations:
+- `skills/continuous-learning/SKILL.md` — `## Do Not Save`
+- `skills/memory-audit/SKILL.md` — `## DROP Categories`
+
+Each row is a shape, an example, why it fails, and its exception, with no verdict. Capture's lead-in makes a match "not saved"; the audit's makes it DROP.
+
+```markdown
+<!-- SYNC:drop-shapes -->
+| # | Shape | Example | Why it fails | Exception |
+|---|-------|---------|--------------|-----------|
+| D1 | Self-marked superseded, deferred, or abandoned | Says **SUPERSEDED**, *deferred indefinitely*, *closed without implementation*, or points at another memory as the current decision | The current memory carries the decision; a cross-link back from it is enough provenance. | A `Pending:` line marks work in flight, not deferral. |
+| D2 | Record of a shipped one-time change | "Renamed folder `Install/` to `Sync/` after the command rename" | Once shipped, history answers it, and sessions read the current code, not the migration story. Without version control nothing else records the change, so judge it on behavior alone. | The change still imposes a constraint future code must honor; the memory is then about the constraint. |
+| D3 | Naming or style decision an enforcer covers | "Kept the `External` prefix on adapter types" | The type system, lint, or formatter carries the decision. | The rule has no enforcer and the code depends on people following it. |
+| D4 | One-time bug fix the code now shows | "The filter skipped the first element instead of the matching one; it now compares identity" | The code reads correctly today; a future regressor reads the code, not the KB. | The bug class recurs, or the memory names the tempting simplification and what it breaks, as trigger, symptom, and avoidance. |
+| D5 | Description of what specific code does | "What the new `ReportPublisher` chain emits and in which order" | Merged, the code explains itself; written in the same session, it is no evidence (Rule 3). | A trap the code does not show, stated as trigger, symptom, and avoidance. |
+| D6 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance", one PR cited | Strip the example and a textbook tip remains (Rule 1). | — |
+| D7 | Tool, language, or public API reference | "`git rebase -i` opens a todo list"; how an internal proxy's mock rules work, with project endpoints sprinkled in | Applies to any project using the tool (Rule 1); it belongs in the tool's docs or `CLAUDE.local.md`. | — |
+| D8 | Fault in one engineer's environment | "Signed requests fail because this machine's clock drifts with NTP blocked" | Not project behavior, even with project anchors; it is that engineer's `CLAUDE.local.md` note. | — |
+| D9 | Research for deferred or dormant work | "Options considered for feature X (deferred)" | It belongs in a planning doc; the KB is for how a session works on the active code today. | Findings a current decision depends on. |
+| D10 | One-line rule | A single-sentence convention with no context or consequences | It fits one bullet in `CLAUDE.md`, where it belongs — suggest that bullet. A file is overhead for content that cannot grow. | — |
+| D11 | Narrow learning covered by a sibling | A 30-line facet of the 200-line learning next to it | The sibling answers the same search. Any line the sibling lacks moves into it. | — |
+<!-- /SYNC -->
+```
+
+---
+
 ## Drift verification (CI-ready)
 
 ```sh
