@@ -56,18 +56,7 @@ Deliberate choices about how the project should work.
 
 > Personal preferences (*"I prefer,"* *"I like"*) are **not** decisions. See [Capture Rules](#capture-rules).
 
-**Domain prefixes:**
-
-| Domain | Examples |
-|--------|----------|
-| `architecture` | `decision_architecture_mvvm_coordinators` |
-| `codestyle` | `decision_codestyle_naming_conventions` |
-| `tooling` | `decision_tooling_linter_config` |
-| `testing` | `decision_testing_snapshot_strategy` |
-| `networking` | `decision_networking_retry_policy` |
-| `ui` | `decision_ui_design_system` |
-| `data` | `decision_data_orm_selection` |
-| `project` | `decision_project_minimum_platform_version` |
+**Domain prefixes:** `architecture`, `codestyle`, `tooling`, `testing`, `networking`, `ui`, `data`, `project` — e.g. `decision_architecture_mvvm_coordinators`, `decision_project_minimum_platform_version`.
 
 ---
 
@@ -80,7 +69,7 @@ Every memory must satisfy all three rules.
 
 - **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify. Every claim must also change how a session works in a project whose sessions read this KB. Listing another project in `Applies to:` does not make its internals relevant: knowledge of another project's internals is cut down to the conclusion that changes work in the reading project. A claim about another project counts as checked only if the session read that project's code, or an internal doc cited in `References:`.
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in narration of "who did what." Describe the artifact (the bug, the pattern, the decision), not who touched it. Identifiers age badly and add no signal even in a single-user KB.
-- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage alone does not make the pattern worth a memory, because the code already conveys it — unless new code could break it unnoticed. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
+- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage shows the pattern exists; whether it is worth a memory is the forcing-function's call. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
   - **Bad patterns present in the code** are handled by category, not by exclusion. If one engineer flags a pattern as bad without team ratification, the appropriate shape is a `learning_` warning (e.g. `learning_dont_use_X_because_Y`) — **only** when it carries trigger (*"when you use X in case Y…"*), symptom (*"…it leaks / races / drops data"*), and avoidance (*"use Z instead"*). If the team has agreed the pattern is bad and should be avoided or replaced, the team agreement itself makes it a `decision_` (e.g. `decision_architecture_deprecate_X`). Pure *"this should be refactored someday"* observations without that shape belong in the issue tracker.
 <!-- /SYNC -->
 
@@ -90,7 +79,7 @@ Every memory must satisfy all three rules.
 
 ### Step 1: Evaluate the Current Task
 
-After completing any task, evaluate in two stages.
+Before the final reply of a turn that produced a candidate, evaluate it in two stages.
 
 **Stage A — The forcing-function, the one gate here:** without this memory, would a future session act differently in the project? Non-obvious causes, project decisions, and conventions the code follows without making obvious usually pass. It fails when the current code or a mechanical check already drives the behavior, when the error or compiler message already names the cause, and for a "use X for Y" memory when X is already the dominant way the code does Y. Fail → skip. Otherwise continue to Stage B.
 
@@ -170,8 +159,6 @@ Refresh: <see Update existing>                       (edits only)
 
 If the substance line describes general, tool, language, or environment knowledge, reject the `Write` to `memories/`. Emit the content as a draft `CLAUDE.local.md` section (heading `## <Tool/Service Name>`) and a one-line note: "this is environment/tool config — consider adding the section above to `CLAUDE.local.md`." Stop (on an Edit, route only the added text — see Update existing). Do not edit `CLAUDE.local.md`; the user decides.
 
-This shape forces the test to happen — you cannot list anchors without finding them, cannot describe the substance without evaluating it — without reprinting the full draft.
-
 **Check 2: Personal-identifier scan.**
 
 Scan the drafted content for personal identifiers. Look for `@` characters (handles, emails), `<word>/<TICKET>-` and `<word>/<ticket>-description` branch-name shapes, `<word>@<word>` email shapes, and any first-name-looking tokens in examples, commit references, or narration. Any hit → rewrite to describe the artifact (the bug, pattern, decision) without the actor, or skip the save. Mechanical grep, not a vibe check. Scan for credentials, tokens, and private endpoints the same way; an internal doc's link in `References:` is expected, not sensitive.
@@ -184,7 +171,7 @@ Under version control, verify the memory's central claim against the default bra
 
 **How to write it:** phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <PR or ticket>` on the line after `Applies to:` — never a branch name or a description of the change. Record what stays true after the merge, not the surface of the unmerged API. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
 
-**Save (only after Checks 1 and 2 pass and the block is printed):**
+**Save (only after Checks 1–3 pass and the block is printed):**
 ```
 Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", content: "<structured markdown>")
 ```
@@ -193,7 +180,7 @@ Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", 
 
 1. Run the checks on the added text. If Check 1 fails, route that text, not the memory.
 2. Fold the new text into the section it belongs to, and rewrite a contradicted or superseded statement where it stands. Never append a section for a refinement or a correction — a `Related:` note is not a correction either. If Check 3 printed `pending`, keep the statement and add the conditional one beside it.
-3. Refresh the rest of the file in the same edit. If its `Pending:` change has merged, fold it in: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Check its backticked symbols with one `git grep` against the default branch, and its `Related:` targets for existence. Report a missing symbol or broken link rather than fixing or deleting it — removing content is the audit's job, after approval. Its line in the block:
+3. Refresh the rest of the file in the same edit. If its `Pending:` change has merged, fold it in: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Check its backticked symbols with one `git grep` against the default branch, and its `Related:` targets for existence. Report a missing symbol or broken link rather than fixing or deleting it: unlike a statement this session contradicted, a failed grep does not show what the text should now say. Its line in the block:
    - **Refresh:** `pending <PR or ticket> merged -> folded` | `pending open` | `no pending` | `pending n/a (no VCS)`; `symbols <held>/<total>` (missing ones named); `links ok` | `links broken: <names>`
 4. After a scripted or multi-part edit, re-read the whole file to catch a broken splice.
 
@@ -205,14 +192,14 @@ Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<s
 
 ## Do Not Save
 
-A draft matching a row is not saved unless its Exception holds. Cite the row (e.g. `D4`) when skipping.
+A draft matching a row is not saved unless it names the memory, rule, or code that makes its Exception hold. Cite the row (e.g. `D4`) when skipping.
 
 <!-- SYNC:drop-shapes -->
 | # | Shape | Example | Why it fails | Exception |
 |---|-------|---------|--------------|-----------|
 | D1 | Self-marked superseded, deferred, or abandoned | Says **SUPERSEDED**, *deferred indefinitely*, *closed without implementation*, or points at another memory as the current decision | The current memory carries the decision; a cross-link back from it is enough provenance. | A `Pending:` line marks work in flight, not deferral. |
 | D2 | Record of a shipped one-time change | "Renamed folder `Install/` to `Sync/` after the command rename" | Once shipped, history answers it, and sessions read the current code, not the migration story. Without version control nothing else records the change, so judge it on behavior alone. | The change still imposes a constraint future code must honor; the memory is then about the constraint. |
-| D3 | Naming or style decision an enforcer covers | "Kept the `External` prefix on adapter types" | The type system, lint, or formatter carries the decision. | The rule has no enforcer and the code depends on people following it. |
+| D3 | Naming or style decision an enforcer covers | "Kept the `External` prefix on adapter types" | The type system, lint, or formatter carries the decision. | It carries what the code cannot show: a rejected alternative with its reason, or a trap as trigger, symptom, and avoidance. A bare unenforced rule is D10. |
 | D4 | One-time bug fix the code now shows | "The filter skipped the first element instead of the matching one; it now compares identity" | The code reads correctly today; a future regressor reads the code, not the KB. | The bug class recurs, or the memory names the tempting simplification and what it breaks, as trigger, symptom, and avoidance. |
 | D5 | Description of what specific code does | "What the new `ReportPublisher` chain emits and in which order" | Merged, the code explains itself; written in the same session, it is no evidence (Rule 3). | A trap the code does not show, stated as trigger, symptom, and avoidance. |
 | D6 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance", one PR cited | Strip the example and a textbook tip remains (Rule 1). | — |
@@ -228,7 +215,7 @@ When the underlying knowledge *is* salvageable, rewrite before saving:
 | Bad | Good |
 |-----|------|
 | Problem section names a specific engineer hitting a cache bug in auth | *"Auth flow hits a cache bug under condition X"* — drop the actor, keep the symptom |
-| *"I prefer early returns"*, existing code consistently uses them (or the team agreed), and no lint rule, formatter, or compiler check enforces them | Save as `decision_codestyle_early_returns` citing the codebase usage or agreement — Rule 3 makes it a pattern; the forcing-function passes only because nothing enforces it and new code could break it |
+| *"I prefer early returns"*, existing code consistently uses them (or the team agreed), and no lint rule, formatter, or compiler check enforces them | Suggest a `CLAUDE.md` bullet citing the codebase usage or agreement (D10). Save `decision_codestyle_early_returns` only if it records a rejected alternative with its reason (D3) |
 
 ---
 
@@ -255,6 +242,6 @@ When the user asks to "run a retrospective", "extract learnings from this sessio
 1. Review conversation history for extractable knowledge.
 2. Search existing memories following Step 2 of the Extraction Workflow.
 3. Filter candidates through Step 1 — Stage A's forcing-function gate and Stage B's Capture Rules.
-4. Save the top 1–3 highest-value candidates that pass, following Step 3's pre-`Write` checks. The cap is deliberate: a long session can yield many qualifying memories, and three is the most worth adding at once — the gates decide what is eligible, the cap decides how many land per session. Note any you set aside.
+4. Save the top 1–3 highest-value candidates that pass, following Step 3's pre-`Write` checks — three at most per retrospective, however many qualify. Note any you set aside.
 5. Report what was created and why in a brief summary.
 

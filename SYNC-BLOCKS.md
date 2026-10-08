@@ -22,7 +22,7 @@ Every memory must satisfy all three rules.
 
 - **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify. Every claim must also change how a session works in a project whose sessions read this KB. Listing another project in `Applies to:` does not make its internals relevant: knowledge of another project's internals is cut down to the conclusion that changes work in the reading project. A claim about another project counts as checked only if the session read that project's code, or an internal doc cited in `References:`.
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in narration of "who did what." Describe the artifact (the bug, the pattern, the decision), not who touched it. Identifiers age badly and add no signal even in a single-user KB.
-- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage alone does not make the pattern worth a memory, because the code already conveys it — unless new code could break it unnoticed. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
+- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage shows the pattern exists; whether it is worth a memory is the forcing-function's call. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
   - **Bad patterns present in the code** are handled by category, not by exclusion. If one engineer flags a pattern as bad without team ratification, the appropriate shape is a `learning_` warning (e.g. `learning_dont_use_X_because_Y`) — **only** when it carries trigger (*"when you use X in case Y…"*), symptom (*"…it leaks / races / drops data"*), and avoidance (*"use Z instead"*). If the team has agreed the pattern is bad and should be avoided or replaced, the team agreement itself makes it a `decision_` (e.g. `decision_architecture_deprecate_X`). Pure *"this should be refactored someday"* observations without that shape belong in the issue tracker.
 <!-- /SYNC -->
 ```
@@ -32,7 +32,7 @@ Every memory must satisfy all three rules.
 ## Block 2: Strip-the-anchors test
 
 Locations:
-- `skills/continuous-learning/SKILL.md` — inside Step 4 (pre-save Check 1)
+- `skills/continuous-learning/SKILL.md` — inside Step 3 (pre-save Check 1)
 - `skills/memory-audit/SKILL.md` — inside criterion 1
 
 ```markdown
@@ -46,7 +46,7 @@ Locations:
 ## Block 3: `Applies to:` semantics
 
 Locations:
-- `skills/continuous-learning/SKILL.md` — inside Step 4 (`### Applies to` subsection)
+- `skills/continuous-learning/SKILL.md` — inside Step 3 (`### Applies to` subsection)
 - `skills/memory-audit/SKILL.md` — inside the `Applies to:` callout near the top
 
 ```markdown
@@ -73,7 +73,7 @@ Each row is a shape, an example, why it fails, and its exception, with no verdic
 |---|-------|---------|--------------|-----------|
 | D1 | Self-marked superseded, deferred, or abandoned | Says **SUPERSEDED**, *deferred indefinitely*, *closed without implementation*, or points at another memory as the current decision | The current memory carries the decision; a cross-link back from it is enough provenance. | A `Pending:` line marks work in flight, not deferral. |
 | D2 | Record of a shipped one-time change | "Renamed folder `Install/` to `Sync/` after the command rename" | Once shipped, history answers it, and sessions read the current code, not the migration story. Without version control nothing else records the change, so judge it on behavior alone. | The change still imposes a constraint future code must honor; the memory is then about the constraint. |
-| D3 | Naming or style decision an enforcer covers | "Kept the `External` prefix on adapter types" | The type system, lint, or formatter carries the decision. | The rule has no enforcer and the code depends on people following it. |
+| D3 | Naming or style decision an enforcer covers | "Kept the `External` prefix on adapter types" | The type system, lint, or formatter carries the decision. | It carries what the code cannot show: a rejected alternative with its reason, or a trap as trigger, symptom, and avoidance. A bare unenforced rule is D10. |
 | D4 | One-time bug fix the code now shows | "The filter skipped the first element instead of the matching one; it now compares identity" | The code reads correctly today; a future regressor reads the code, not the KB. | The bug class recurs, or the memory names the tempting simplification and what it breaks, as trigger, symptom, and avoidance. |
 | D5 | Description of what specific code does | "What the new `ReportPublisher` chain emits and in which order" | Merged, the code explains itself; written in the same session, it is no evidence (Rule 3). | A trap the code does not show, stated as trigger, symptom, and avoidance. |
 | D6 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance", one PR cited | Strip the example and a textbook tip remains (Rule 1). | — |
