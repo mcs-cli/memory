@@ -186,11 +186,15 @@ Read memories in batches (10-15 at a time) and produce a verdict table for each 
 | 3 | learning_auth_cache_bug.md | UPDATE | Clears the auth cache on account switch, which the code does not signal | Problem section names an engineer — strip the identifier, keep the symptom (A.2) |
 | 4 | decision_codestyle_tabs.md | DROP | — | Personal preference with no lint rule, formatter config, or team agreement (A.3) |
 | 5 | decision_codestyle_naming.md | UPDATE | Names new types by the convention the formatter cannot enforce | Convention still valid but example uses old API (C.4) |
+
+Next: calibration stop
 ```
+
+End every verdict table with a `Next:` line naming what follows this batch: the next batch, the calibration stop (Step 3), or the Step 5 summary.
 
 **Verdict definitions:**
 
-- **KEEP** — no changes needed; **Drives** names what a future session does differently ("claims verified" is not an answer).
+- **KEEP** — no changes needed; **Drives** names what a future session does differently ("claims verified" is not an answer). A fix that changes no claim, such as `Applies to:` placement or a typo in it, is **KEEP +fix**: a KEEP in the calibration stop and the summary, applied in Step 4 like an UPDATE (content).
 - **DROP** — stale, duplicated, generic, or no longer applicable; recommend deletion.
 - **UPDATE** — worth keeping after a fix: rename, merge, refresh references, or restructure.
 
@@ -214,7 +218,7 @@ Things that are **not** approval:
 - A previous batch's approval — approval is per-batch, never carried forward.
 - A general "do an audit" instruction at the start of the session — that authorizes the audit, not any specific verdict.
 
-**Calibration stop.** When the audit runs past two batches, after executing the second one and before assessing the third, list every KEEP you proposed so far — not memories the user kept by overriding a DROP — and every UPDATE whose fix removed more than it kept, each with the strongest case for dropping it, and wait for the user. An audit that ends before a third batch runs this after its last one. Leniency is invisible from inside a batch; this is where it gets challenged.
+**Calibration stop.** When the audit runs past two batches, after executing the second one and before assessing the third, make the strongest case for dropping every KEEP you proposed so far — not memories the user kept by overriding a DROP — and every UPDATE whose fix deletes content rather than correcting it. List in full only the cases that name a DROP row (`D<n>`) or the behavior B.1 says the memory fails to drive; length, narrowness, or feature scope alone is no case. Name the rest in one line, and wait for the user. An audit that ends before a third batch runs this after its last one; a longer audit runs it again after its last batch, over the batches since, before the Step 5 summary. Leniency is invisible from inside a batch; this is where it gets challenged.
 
 If the user goes quiet after a batch, do not move on. End the turn. The user resumes when ready.
 
@@ -238,7 +242,7 @@ Report what was done after each batch. When a later batch contradicts a memory a
 
 ### Step 5: Summary
 
-After all batches are processed, present a final summary:
+After all batches are processed and the calibration stop after the last one has run, present a final summary:
 
 ```
 ## Audit Complete
