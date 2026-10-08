@@ -94,7 +94,7 @@ After completing any task, evaluate in two stages.
 
 **Stage A — The forcing-function, the one gate here:** without this memory, would a future session act differently in the project? Non-obvious causes, project decisions, and conventions the code follows without making obvious usually pass. It fails when the current code or a mechanical check already drives the behavior, when the error or compiler message already names the cause, and for a "use X for Y" memory when X is already the dominant way the code does Y. Fail → skip. Otherwise continue to Stage B.
 
-**Stage B — The three Capture Rules above are hard gates; all three must pass.** Step 3's Checks 1 and 2 enforce Rules 1 and 2; verify Rule 3 against the evidence the rule lists. If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, replace tool-only substance with the actual project anchor) or skip. Do not save partial-fit memories.
+**Stage B — The three Capture Rules above are hard gates; all three must pass.** Step 3's Checks 1 and 2 enforce Rule 1's project tie and Rule 2; verify Rule 1's relevance to the reading project, and Rule 3, against the evidence each lists. If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, replace tool-only substance with the actual project anchor) or skip. Do not save partial-fit memories.
 
 ### Step 2: Search Existing Knowledge
 

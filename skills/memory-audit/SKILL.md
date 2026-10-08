@@ -85,7 +85,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Spot-check the repo — **codebase usage is the strongest single signal**. If the declared pattern is demonstrably present in existing code, the memory is a pattern even without a written rule. If the codebase is inconsistent and there's no config/doc/agreement, it is a preference.
 - **Verdict:** DROP when no evidence exists anywhere. UPDATE when the pattern is real (visible in code, or the user confirms a team agreement) but the memory is phrased as personal taste; rewrite to point at the actual evidence.
 
-### Group B — The audit's own gate
+### Group B — The forcing-function, re-applied
 
 #### B.1 Actionability — the forcing-function test
 - **Primary test:** *"Would a future session act differently in this codebase because this memory exists?"* If the answer is "no, the current code already conveys it" → DROP.
@@ -108,7 +108,6 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 
 #### C.3 Quality
 - Does the memory follow the standard templates? (Problem/Trigger/Solution/Verification/Example for learnings; Decision/Context/Options/Choice/Consequences for ADR decisions; Decision/Rationale/Examples for simplified decisions)
-- Is the content specific enough to be useful but general enough to be reusable?
 - Are code examples still accurate?
 
 #### C.4 Fact-Checking
@@ -173,8 +172,8 @@ If the directory is missing or empty, report the situation (specify whether it d
 
 ### Step 2: Batch Assessment
 
-**Fact-check first, verdict second.** Before producing the verdict table for a batch, run a single grep pass against the codebase for the central claims (symbol names, file paths, type names) referenced across the batch. Verdicts that rest on unverified claims are guesses dressed up as analysis. Specifically:
-- Grep for every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
+**Fact-check first, verdict second.** Before producing the verdict table for a batch, run a single `git grep` pass against the default branch (C.4) for the central claims (symbol names, file paths, type names) referenced across the batch. Verdicts that rest on unverified claims are guesses dressed up as analysis. Specifically:
+- Check every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
 - Spot-check any line numbers and historical line counts; flag stale ones for UPDATE.
 - Read each memory's `Related:` entries, and search the KB on its topic, before judging duplication or contradiction (C.2) — an overlap found while editing arrives after the verdict it should have changed.
 - Watch for `Applies to:` typos (e.g. `mcs-2` when the project is `mcs`) — quick one-line fixes.
@@ -186,7 +185,7 @@ Read memories in batches (10-15 at a time) and produce a verdict table for each 
 | # | File | Verdict | Drives | Rationale |
 |---|------|---------|--------|-----------|
 | 1 | learning_background_task_watchdog.md | KEEP | Moves long work off the watchdog-timed thread instead of raising the timeout | Project-specific debugging discovery (B.1) |
-| 2 | learning_cli_tool_flags.md | DROP | — | Generic third-party CLI reference, no project anchor (A.1) |
+| 2 | learning_cli_tool_flags.md | DROP | — | Generic third-party CLI reference, no project anchor (D7) |
 | 3 | learning_auth_cache_bug.md | UPDATE | Clears the auth cache on account switch, which the code does not signal | Problem section names an engineer — strip the identifier, keep the symptom (A.2) |
 | 4 | decision_codestyle_tabs.md | DROP | — | Personal preference with no lint rule, formatter config, or team agreement (A.3) |
 | 5 | decision_codestyle_naming.md | UPDATE | Names new types by the convention the formatter cannot enforce | Convention still valid but example uses old API (C.4) |
