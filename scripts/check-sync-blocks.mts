@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const files = ["skills/continuous-learning/SKILL.md", "skills/memory-audit/SKILL.md", "SYNC-BLOCKS.md"];
-for (const tag of ["capture-rules", "strip-the-anchors", "applies-to"]) {
+for (const tag of ["capture-rules", "strip-the-anchors", "applies-to", "drop-shapes"]) {
   const blocks = files.map(file => {
     const lines: string[] = [];
     let inside = false;

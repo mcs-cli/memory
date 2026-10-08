@@ -21,9 +21,7 @@ allowed-tools:
 
 # Memory Audit Skill
 
-Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` is the project root: `git rev-parse --show-toplevel`, else `CLAUDE_PROJECT_DIR`, else the current working directory — the same order the memory hooks use. **DROP is not a failure** — deleting a memory that does not qualify (or that belongs in `CLAUDE.local.md`, in a planning doc, or in the tool's own docs) is the audit doing its job.
-
-Over time, memory files accumulate — some become stale, some duplicate each other, some capture generic knowledge that doesn't belong in a project-specific KB. This skill walks through every memory with the user, recommending **KEEP**, **DROP**, or **UPDATE** with clear rationale, and only acts on user-approved changes.
+Audit the knowledge base in `<project>/.claude/memories/` to keep it lean, relevant, and high-quality. `<project>` is the project root: `git rev-parse --show-toplevel`, else `CLAUDE_PROJECT_DIR`, else the current working directory — the same order the memory hooks use. The skill walks through every memory with the user, recommending **KEEP**, **DROP**, or **UPDATE** with clear rationale, and only acts on user-approved changes. **DROP is not a failure** — deleting a memory that does not qualify (or that belongs in `CLAUDE.local.md`, in a planning doc, or in the tool's own docs) is the audit doing its job.
 
 > **This skill is user-initiated only.** Never run it automatically or as part of another workflow.
 
@@ -33,18 +31,16 @@ Over time, memory files accumulate — some become stale, some duplicate each ot
 
 ## Capture Rules
 
-Apply these rules at audit time. A memory that fails any rule is a candidate for UPDATE (when a rewrite restores qualification) or DROP (when nothing of value remains after the rewrite).
+Apply these rules at audit time, through Group A below.
 
 <!-- SYNC:capture-rules -->
 Every memory must satisfy all three rules.
 
 - **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify. Every claim must also change how a session works in a project whose sessions read this KB. Listing another project in `Applies to:` does not make its internals relevant: knowledge of another project's internals is cut down to the conclusion that changes work in the reading project. A claim about another project counts as checked only if the session read that project's code, or an internal doc cited in `References:`.
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in narration of "who did what." Describe the artifact (the bug, the pattern, the decision), not who touched it. Identifiers age badly and add no signal even in a single-user KB.
-- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage alone does not make the pattern worth a memory, because the code already conveys it — unless new code could break it unnoticed. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
+- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage shows the pattern exists; whether it is worth a memory is the forcing-function's call. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
   - **Bad patterns present in the code** are handled by category, not by exclusion. If one engineer flags a pattern as bad without team ratification, the appropriate shape is a `learning_` warning (e.g. `learning_dont_use_X_because_Y`) — **only** when it carries trigger (*"when you use X in case Y…"*), symptom (*"…it leaks / races / drops data"*), and avoidance (*"use Z instead"*). If the team has agreed the pattern is bad and should be avoided or replaced, the team agreement itself makes it a `decision_` (e.g. `decision_architecture_deprecate_X`). Pure *"this should be refactored someday"* observations without that shape belong in the issue tracker.
 <!-- /SYNC -->
-
-The audit enforces these rules through the criteria below — see Group A.
 
 ## The `Applies to:` field
 
@@ -54,7 +50,7 @@ The audit enforces these rules through the criteria below — see Group A.
 When a memory genuinely applies to multiple projects, list them comma-separated (e.g. `**Applies to:** web-dashboard, ios-app, api-backend`); the content must stay true in every listed project. When a memory is only partially relevant to one listed project, split it into separate memories instead of mixing.
 <!-- /SYNC -->
 
-**Audit-time usage.** Audit only the memories in the current checkout's `.claude/memories/` and fact-check against this project only. When deciding whether a memory targets *this* project, compare its `Applies to:` against the **git repo name**, not the directory basename — a folder rename does not change the project. Never DROP a memory solely because its `Applies to:` lists other projects. If the KB is centralized across projects via a separate mechanism, that mechanism owns its own audit — this skill does not reach across repos.
+**Audit-time usage.** Audit the memories in the current checkout's `.claude/memories/`, whatever their `Applies to:` says. Fact-check code claims against this project; judge a claim about another project by Capture Rule 1 — whether it changes work here, and the code or `References:` doc behind it — not by grepping here. Compare `Applies to:` against the **git repo name**, not the directory basename — a folder rename does not change the project. Never DROP a memory solely because its `Applies to:` lists other projects.
 
 ---
 
@@ -63,31 +59,27 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 Evaluate each memory against the criteria below, grouped into three:
 
 - **Group A** mirrors the Capture Rules (the same gates a memory had to pass at save time). A memory that violates any of these now is a candidate for UPDATE or DROP — even if it slipped through capture.
-- **Group B** is the audit's own gate: the forcing-function test. Capture cannot test it because only audit sees how a memory has aged. This is where past audits drifted into KEEP-by-default; apply it with teeth.
+- **Group B** is the forcing-function test, re-applied with hindsight: capture tested it at save time, but only the audit sees how a memory has aged.
 - **Group C** are audit-only mechanics — tests that depend on the current state of the codebase, the KB as a whole, or time elapsed since capture.
 
 ### Group A — Capture Rules, restated
 
+A memory that fails a rule is UPDATE when a rewrite restores it, else DROP.
+
 #### A.1 Tied to at least one project (Capture Rule 1)
-- DROP memories that duplicate **public** documentation, or that have no real tie to any project in `Applies to:`.
-- KEEP summaries of **internal** docs. One that lacks a `References:` link to its source is UPDATE (add the link), not DROP.
-- Apply the strip-the-anchors test:
+A summary of an **internal** doc passes this rule (B.1 still decides KEEP); one lacking a `References:` link to its source is UPDATE (add the link). Apply the strip-the-anchors test:
 
 <!-- SYNC:strip-the-anchors -->
 **Strip-the-anchors test.** Mentally delete every project-specific reference (paths, symbols, endpoints, business logic, ticket prefixes, instance IDs, custom-field IDs, internal CLI flags) from the memory's content. What is left is the *substance*. If the substance is a useful standalone document — generic tool, language, or framework knowledge that would help any reader anywhere — the project tie was decoration and the memory does not qualify as project knowledge. **Internal or proprietary tools are not exempt:** how a private CLI, MCP server, GUI, or company-internal tool *works in general* belongs in the tool's own docs or in `CLAUDE.local.md`. Project endpoints sprinkled inside a tool how-to do not make it project knowledge.
 <!-- /SYNC -->
 
-If the test fails, recommend DROP — or UPDATE only if a rewrite around the actual project anchor produces something genuinely project-specific.
-
 #### A.2 Anonymous (Capture Rule 2)
-- Look for names, handles, emails, and "who fixed what" narration anywhere in the memory.
-- **Verdict:** UPDATE to strip the identifier entirely (describe the artifact, not the actor) when the underlying knowledge is still useful; DROP when the identifier *is* the content and removing it leaves nothing.
+Names, handles, emails, or "who fixed what" narration anywhere: UPDATE to describe the artifact, not the actor; DROP when the identifier *is* the content.
 
 #### A.3 Project pattern, not personal preference (Capture Rule 3)
-- Spot-check the repo — **codebase usage is the strongest single signal**. If the declared pattern is demonstrably present in existing code, the memory is a pattern even without a written rule. If the codebase is inconsistent and there's no config/doc/agreement, it is a preference.
-- **Verdict:** DROP when no evidence exists anywhere. UPDATE when the pattern is real (visible in code, or the user confirms a team agreement) but the memory is phrased as personal taste; rewrite to point at the actual evidence.
+Spot-check the repo. Consistent usage shows a pattern exists, not that it needs a memory — B.1 decides that. If the only evidence is code from the same commit window as the memory's creation (compare `git log` on the project and memories roots), it has no precedent (Rule 3). DROP when no evidence exists. UPDATE only when the pattern is real but phrased as taste and the rewrite, pointing at the evidence, still passes B.1; otherwise DROP.
 
-### Group B — The audit's own gate
+### Group B — The forcing-function, re-applied
 
 #### B.1 Actionability — the forcing-function test
 - **Primary test:** *"Would a future session act differently in this codebase because this memory exists?"* If the answer is "no, the current code already conveys it" → DROP.
@@ -100,7 +92,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 #### C.1 Naming Convention
 - Learnings must follow `learning_<topic>_<specific>.md`.
 - Decisions must follow `decision_<domain>_<topic>.md`.
-- Files that don't follow either pattern are likely older or ad-hoc — flag for rename or reclassification.
+- Files that don't follow either pattern are likely older or ad-hoc — recommend UPDATE (rename or reclassify).
 
 #### C.2 Duplication
 - Does this memory overlap significantly with another memory?
@@ -110,75 +102,60 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 
 #### C.3 Quality
 - Does the memory follow the standard templates? (Problem/Trigger/Solution/Verification/Example for learnings; Decision/Context/Options/Choice/Consequences for ADR decisions; Decision/Rationale/Examples for simplified decisions)
-- Is the content specific enough to be useful but general enough to be reusable?
 - Are code examples still accurate?
 
 #### C.4 Fact-Checking
 - **Verify key claims against the codebase.** If a memory says "we use pattern X in module Y," search the code to confirm that pattern still exists.
-- Use `Grep` to check for symbol names, type names, or patterns referenced in the memory.
-- Use `Glob` to verify that referenced files or modules still exist.
+- Check symbols with `git grep <symbol> <ref>` and files with `git show <ref>:<path>` against the default branch, resolved as capture's Check 3 does — the working tree may hold unmerged work.
 - If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
-- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, the grep may have matched only the memory's own text, or the search may not have run at all — confirm its exit status rather than discarding stderr (for `git grep`, 1 is no match, 128 is an error). When a claim does not match current source, list remote branches with `git rev-parse --symbolic --exclude='*/HEAD' --remotes='*<anchor>*'`, the anchor being a ticket or feature word from the memory, then `git grep` them in a separate call, without fetching — one call per batch, with `-e` per unconfirmed symbol. On a large repo each branch searched costs time, so widen to every branch only when the memory has no anchor, and tell the user the cost first. A hit outside the default branch is unmerged work, not staleness: name the branch in the rationale and ask whether it is still in flight (UPDATE to add `Pending:` naming its PR or ticket) or abandoned. Where you still cannot confirm a symbol, that is the UPDATE-uncertain verdict, not DROP: say in the rationale what you could not confirm, and let the user decide.
+- **An empty grep is not proof the symbol never existed.**
+  - It may live on an unmerged branch, the grep may have matched only the memory's own text, or the search may not have run at all — confirm its exit status rather than discarding stderr (for `git grep`, 1 is no match, 128 is an error).
+  - When a claim does not match current source, list remote branches with `git rev-parse --symbolic --exclude='*/HEAD' --remotes='*<anchor>*'`, the anchor being the ticket or PR from `Pending:` or the memory first, then a feature word — or the memory author's branches when branch names carry the author — then `git grep` them in a separate call, without fetching — one call per batch, with `-e` per unconfirmed symbol. On a large repo each branch searched costs time, so widen to every branch only when the memory has no anchor, and tell the user the cost first. Where `gh` is available, `gh pr list --state all --search <symbol>` shows whether a PR ever existed.
+  - A hit outside the default branch is unmerged work, not staleness: name the branch in the rationale and ask whether it is still in flight (UPDATE to add `Pending:` naming its PR or ticket) or abandoned. Where you still cannot confirm a symbol, the verdict is UPDATE-uncertain until the user or the fallback below resolves it: say in the rationale what you could not confirm, and let the user decide. If the user cannot confirm either, and no pushed branch or PR matches, treat the change as not in flight.
 
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
 - **Deep file paths** — full nested paths are fragile. Recommend UPDATE to use module-level references unless the path is stable and well-known.
 - **Transient details** — feature flag names being removed, in-progress PR numbers (a `Pending:` line excepted), temporary workarounds whose removal condition has been met, or that state none.
-- **Narrative and tool names** — the story of how the knowledge was found (PR sequences, attempts, reverts), or a personal or environment tool (an MCP tool name, a local CLI) where naming the action would do — commands the project's own scripts or CI define stay. Recommend UPDATE to state the rule it taught and name the action.
+- **Narrative and tool names** — the story of how the knowledge was found (PR sequences, attempts, reverts), or a personal or environment tool (an MCP tool name, a local CLI) where naming the action would do — commands the project's own scripts or CI define stay. Recommend UPDATE to state the rule it taught and name the action. A rejected option with its reason is not narrative.
 - References to features or files that may have been removed or heavily refactored.
 - **Broken `Related:` links** — an entry in the memory's `Related:` section that points at a memory filename no longer present (DROP'd or renamed during a previous audit). Recommend UPDATE to fix the link to its new name or remove the entry.
 - Old dates without timeless content — treat as a signal for closer scrutiny, not an automatic DROP.
 
 ---
 
-## DROP Categories — recurring patterns that should not need user pushback
+## DROP Categories
 
-The categories below are the recurring concrete shapes of B.1 (forcing-function) failure. When a memory matches one, the analysis is already done — call DROP without hedging beyond a category's own "Exception" or "Keep only when" clause, which you should apply.
+The rows below are the recurring shapes of Capture Rule and forcing-function failure. A memory matching a row is DROP — the analysis is already done, so call it without hedging and cite the row (e.g. `D4`) in the rationale. An Exception holds only when the rationale names the memory, rule, or code that makes it hold; otherwise DROP, not a softer UPDATE or KEEP.
 
-### A. Self-marked superseded / deferred / abandoned
-- The memory itself says **SUPERSEDED**, **deferred indefinitely**, **closed without implementation**, **path abandoned**, or points at another memory as the current decision.
-- The "historical context" argument is rarely worth a file. If the superseder cross-links back, that's enough provenance. DROP the older one.
-- A `Pending:` line is not deferral — it marks work in flight, judged by whether it merged (Step 2).
-
-### B. Pure historical records of shipped one-time changes
-- Folder renames, file renames, identifier migrations, org migrations *that are done*. Once shipped, `git log` answers "why is this named X?" The memory adds nothing actionable. This assumes version control holds the history — without it nothing else records the change, so judge on behavior alone.
-- Exception: when the historical change still imposes an ongoing constraint future code must honor — then the memory is about the constraint, not the change.
-
-### C. Shipped naming or style decisions
-- "We named the prefix X" / "we kept type Y suffixed" / "we use this enum case style." Once enforced by the type system, lint, or formatter, the decision is in the code. Future sessions read the code, not the memory.
-- Keep only when the rule has *no* enforcer (no lint, no formatter, no compiler check) and the codebase actually depends on humans following it.
-
-### D. One-time bug fixes whose fix is self-evident in the code now
-- "Bug X skipped the first element instead of the matching one; we changed the filter to compare identity." The fix is a two-line diff and the code reads correctly today. A future regressor would not consult the memory; the existing code is the documentation.
-- Keep only when the bug class is *recurring* (same pattern in multiple places, or a footgun future code might re-introduce) and the memory teaches the *avoidance pattern*, not the one fix.
-
-### E. Generic engineering wisdom dressed up with one project example
-- "Extract methods over condensing." "DRY via helpers." "Don't blindly apply review feedback." "Validate hardcoded lists against upstream." These are universal — they belong in a coding-style doc, not a project KB.
-- Test: strip the project example. If what remains is a textbook tip you'd find in any "clean code" article, DROP.
-
-### F. Research artifacts for deferred / dormant work
-- Cross-platform audits, competitor analyses, tool surveys, "options considered for feature X (deferred)." Useful when the work resumes — but they belong in a planning doc or `docs/`, not the memory KB. The KB is for things that change *how a session would work on the active codebase today*.
-- Keep only if the audit findings are referenced by *currently active* decisions.
-
-### G. One-line preferences belonging in CLAUDE.md
-- A single-sentence rule with no Context / Options / Consequences. If it fits in one line of CLAUDE.md and applies project-wide, that's where it goes. A standalone memory file is overhead.
-- Test: would the memory's content be a single bullet under "Conventions" in CLAUDE.md? Then DROP and (if not already there) suggest moving it.
-
-### H. Tiny / narrow learnings whose scope is fully covered by a sibling memory
-- A 30-line learning that captures one facet of a 200-line learning next to it. Cross-reference and DROP the smaller one, or merge.
+<!-- SYNC:drop-shapes -->
+| # | Shape | Example | Why it fails | Exception |
+|---|-------|---------|--------------|-----------|
+| D1 | Self-marked superseded, deferred, or abandoned | Says **SUPERSEDED**, *deferred indefinitely*, *closed without implementation*, or points at another memory as the current decision | The current memory carries the decision; a cross-link back from it is enough provenance. | A `Pending:` line marks work in flight, not deferral. |
+| D2 | Record of a shipped one-time change | "Renamed folder `Install/` to `Sync/` after the command rename" | Once shipped, history answers it, and sessions read the current code, not the migration story. Without version control nothing else records the change, so judge it on behavior alone. | The change still imposes a constraint future code must honor; the memory is then about the constraint. |
+| D3 | Naming or style decision an enforcer covers | "Kept the `External` prefix on adapter types" | The type system, lint, or formatter carries the decision. | It carries what the code cannot show: a rejected alternative with its reason, or a trap as trigger, symptom, and avoidance. A bare unenforced rule is D10. |
+| D4 | One-time bug fix the code now shows | "The filter skipped the first element instead of the matching one; it now compares identity" | The code reads correctly today; a future regressor reads the code, not the KB. | The bug class recurs, or the memory names the tempting simplification and what it breaks, as trigger, symptom, and avoidance. |
+| D5 | Description of what specific code does | "What the new `ReportPublisher` chain emits and in which order" | Merged, the code explains itself; written in the same session, it is no evidence (Rule 3). | A trap the code does not show, stated as trigger, symptom, and avoidance. |
+| D6 | Generic engineering wisdom with a token project example | "Extract methods over condensing for lint compliance", one PR cited | Strip the example and a textbook tip remains (Rule 1). | — |
+| D7 | Tool, language, or public API reference | "`git rebase -i` opens a todo list"; how an internal proxy's mock rules work, with project endpoints sprinkled in | Applies to any project using the tool (Rule 1); it belongs in the tool's docs or `CLAUDE.local.md`. | — |
+| D8 | Fault in one engineer's environment | "Signed requests fail because this machine's clock drifts with NTP blocked" | Not project behavior, even with project anchors; it is that engineer's `CLAUDE.local.md` note. | — |
+| D9 | Research for deferred or dormant work | "Options considered for feature X (deferred)" | It belongs in a planning doc; the KB is for how a session works on the active code today. | Findings a current decision depends on. |
+| D10 | One-line rule | A single-sentence convention with no context or consequences | It fits one bullet in `CLAUDE.md`, where it belongs — suggest that bullet. A file is overhead for content that cannot grow. | — |
+| D11 | Narrow learning covered by a sibling | A 30-line facet of the 200-line learning next to it | The sibling answers the same search. Any line the sibling lacks moves into it. | — |
+<!-- /SYNC -->
 
 ---
 
 ## Audit Workflow
 
-> **Per-batch consent is mandatory.** Each batch is its own approval cycle: produce the verdict table, **stop**, wait for the user, apply their decisions, summarize, then — only after that — move on to the next batch. Never chain batches without an explicit go-ahead between them. See Step 3 for the hard-stop rules.
+> **Per-batch consent is mandatory.** Each batch is its own approval cycle: verdict table, stop, the user's decisions, execution, summary — never chain batches. Step 3 holds the hard-stop rules.
 
-> **Stay at project root.** Do not `cd` into `.claude/memories/` (or any subdirectory) at any point during the audit. Codebase fact-checks (Grep/Glob/Bash) need cwd at the project root — running them from inside `.claude/memories/` resolves patterns against memory files instead of project source, silently passing fact-checks that should fail. Reference memory files by full path (e.g. `.claude/memories/<file>.md`).
+> **Stay at project root.** Do not `cd` into `.claude/memories/` (or any subdirectory) at any point during the audit, not even inside a compound command. Codebase fact-checks (Grep/Glob/Bash) need cwd at the project root — running them from inside `.claude/memories/` resolves patterns against memory files instead of project source, silently passing fact-checks that should fail. Reference memory files by full path (e.g. `.claude/memories/<file>.md`).
 
 > **Verdicts are not delegated.** Sub-agents may gather facts for a batch — each memory's claims marked found, missing, or contradicted, with evidence — but never KEEP/UPDATE/DROP, a category, or a rationale; say so in their prompt. Read every memory yourself and reach each verdict here: a verdict handed over in writing anchors whoever reviews it.
 
-> **Scope.** Default scope is every memory in `<project>/.claude/memories/`. The user may scope narrower: by category (`learning_*` only), by age (older than N months), or by `Applies to:` (only memories tagging this repo). Honor the requested scope; report the count covered vs. total.
+> **Scope.** Default scope is every memory in `<project>/.claude/memories/`. The user may scope narrower: by category (`learning_*` only), by age (older than N months), or by `Applies to:` (only memories tagging this repo). Honor the requested scope; report the count covered vs. total. To scope by author or date, find the memories' own git root with `git -C .claude/memories rev-parse --show-toplevel` and run `git -C <root> log` there — it may differ from the project's.
 
 ### Step 1: Inventory
 
@@ -192,20 +169,20 @@ If the directory is missing or empty, report the situation (specify whether it d
 
 ### Step 2: Batch Assessment
 
-**Fact-check first, verdict second.** Before producing the verdict table for a batch, run a single grep pass against the codebase for the central claims (symbol names, file paths, type names) referenced across the batch. Verdicts that rest on unverified claims are guesses dressed up as analysis. Specifically:
-- Grep for every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
+**Fact-check first, verdict second.** Before producing the verdict table for a batch, run a single `git grep` pass against the default branch (C.4) for the central claims (symbol names, file paths, type names) referenced across the batch. Verdicts that rest on unverified claims are guesses dressed up as analysis. Specifically:
+- Check every distinct symbol/type referenced in the batch — confirm presence, note renames or deletions.
 - Spot-check any line numbers and historical line counts; flag stale ones for UPDATE.
 - Read each memory's `Related:` entries, and search the KB on its topic, before judging duplication or contradiction (C.2) — an overlap found while editing arrives after the verdict it should have changed.
 - Watch for `Applies to:` typos (e.g. `mcs-2` when the project is `mcs`) — quick one-line fixes.
-- Check memories carrying a `**Pending:**` line against the default branch first (resolve the ref as capture's Check 3 does). Merged → UPDATE to the merged state: remove the statement it superseded, the conditional phrasing, and the `Pending:` line. Still in flight → leave it. Abandoned → UPDATE to remove the conditional part, or DROP if nothing else remains.
+- Check memories carrying a `**Pending:**` line against the default branch first (resolve the ref as capture's Check 3 does). Merged → UPDATE to the merged state: remove the statement it superseded, the conditional phrasing, and the `Pending:` line. Still in flight → leave it. Abandoned, or not in flight under C.4's fallback → UPDATE to remove the conditional part, or DROP if nothing else remains.
 
 Read memories in batches (10-15 at a time) and produce a verdict table for each batch:
 
 ```
 | # | File | Verdict | Drives | Rationale |
 |---|------|---------|--------|-----------|
-| 1 | learning_background_task_watchdog.md | KEEP | Moves long work off the watchdog-timed thread instead of raising the timeout | Project-specific debugging discovery (B.1) |
-| 2 | learning_cli_tool_flags.md | DROP | — | Generic third-party CLI reference, no project anchor (A.1) |
+| 1 | learning_background_task_watchdog.md | KEEP | Moves long work off the watchdog-timed thread instead of raising the timeout | The kill logs no cause and the code does not show the limit, so a session would raise the timeout (B.1) |
+| 2 | learning_cli_tool_flags.md | DROP | — | Generic third-party CLI reference, no project anchor (D7) |
 | 3 | learning_auth_cache_bug.md | UPDATE | Clears the auth cache on account switch, which the code does not signal | Problem section names an engineer — strip the identifier, keep the symptom (A.2) |
 | 4 | decision_codestyle_tabs.md | DROP | — | Personal preference with no lint rule, formatter config, or team agreement (A.3) |
 | 5 | decision_codestyle_naming.md | UPDATE | Names new types by the convention the formatter cannot enforce | Convention still valid but example uses old API (C.4) |
@@ -213,9 +190,9 @@ Read memories in batches (10-15 at a time) and produce a verdict table for each 
 
 **Verdict definitions:**
 
-- **KEEP** — Memory is relevant, actionable, well-structured, and not duplicated. No changes needed. **Drives** names what a future session would do differently because it exists; "claims verified" is a fact-check, not an answer (B.1).
-- **DROP** — Memory is stale, duplicated, generic, or no longer applicable. Recommend deletion.
-- **UPDATE** — Memory has value but needs fixes: rename to follow conventions, merge with another memory, refresh stale references, or improve structure.
+- **KEEP** — no changes needed; **Drives** names what a future session does differently ("claims verified" is not an answer).
+- **DROP** — stale, duplicated, generic, or no longer applicable; recommend deletion.
+- **UPDATE** — worth keeping after a fix: rename, merge, refresh references, or restructure.
 
 For UPDATE verdicts, briefly describe what needs to change, and fill **Drives** for the memory *after* the fix. Apply the strip-the-anchors test to what the fix leaves: an UPDATE that trims narrative or stale numbers off a generic core is a DROP.
 
@@ -229,6 +206,7 @@ The user must explicitly respond before you do anything else. Acceptable signals
 - Explicit approval ("approved," "go ahead," "looks good," "yes," "proceed").
 - Per-item overrides ("keep #2, drop the rest," "change #3 to UPDATE").
 - A request to see more (full content of a memory, fuller rationale) — answer it, then return to the stop.
+- A direct instruction about an item already applied — it is its own approval.
 
 Things that are **not** approval:
 - Silence, a thumbs-up emoji alone, or a one-word "ok" without context — if ambiguous, ask.
@@ -236,7 +214,7 @@ Things that are **not** approval:
 - A previous batch's approval — approval is per-batch, never carried forward.
 - A general "do an audit" instruction at the start of the session — that authorizes the audit, not any specific verdict.
 
-**Calibration stop.** When the audit runs past two batches, after executing the second one and before assessing the third, list every KEEP you proposed so far — not memories the user kept by overriding a DROP — with the strongest case for dropping it, and wait for the user. Leniency is invisible from inside a batch; this is where it gets challenged.
+**Calibration stop.** When the audit runs past two batches, after executing the second one and before assessing the third, list every KEEP you proposed so far — not memories the user kept by overriding a DROP — and every UPDATE whose fix removed more than it kept, each with the strongest case for dropping it, and wait for the user. An audit that ends before a third batch runs this after its last one. Leniency is invisible from inside a batch; this is where it gets challenged.
 
 If the user goes quiet after a batch, do not move on. End the turn. The user resumes when ready.
 
@@ -249,10 +227,11 @@ Run only after Step 3 has produced an explicit approval (or per-item decisions) 
 The per-prompt memory reminder does not apply while auditing: a memory found wrong goes into the batch, not to continuous-learning, and the approved edits below are this skill's own writes.
 
 - **DROP**: Re-read the file and confirm the rationale still holds — for a "covered by X" DROP, that X actually carries the content — then delete it with `Bash(rm <path>)`. If it no longer holds, tell the user before deleting — the approval rested on that rationale.
+- **After each DROP or rename**, grep every memory's full text — not only `Related:` / `References:` lines — for the old filename and remove the pointers. Where prose leaned on the dropped memory, propose the rewrite as an UPDATE and wait for approval like any other.
 - **UPDATE (rename)**: Rename with `Bash(mv <old> <new>)`
-- **UPDATE (content)**: Use `Edit` or `Write` to update the file. Rewrite a contradicted statement where it stands rather than appending a correction, then re-read the whole file to catch a broken splice.
+- **UPDATE (content)**: Use `Edit` or `Write` to update the file. Rewrite a contradicted statement where it stands rather than appending a correction. After a scripted or multi-part edit, re-read the whole file to catch a broken splice.
 - **UPDATE (merge)**: Create the merged file, then delete the originals
-- **UPDATE (uncertain)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
+- **UPDATE (ask)**: If the correct replacement isn't obvious (e.g., a referenced symbol was removed and the new equivalent is unclear), ask the user what the updated content should be rather than guessing.
 - **Stop at the filesystem.** Never `git add`, commit, or push memory changes — a KB may be tracked in the project's own repo, kept in a separate repo with its own propagation rules, or gitignored and purely local.
 
 Report what was done after each batch. When a later batch contradicts a memory an earlier batch already handled, reopen that memory with the user rather than letting the earlier verdict stand.
@@ -279,8 +258,5 @@ Knowledge base reduced from 42 → 34 files.
 
 ## Guidelines
 
-- **Never delete or edit without explicit per-batch approval.** Print the verdict table, then stop. Do not run any tool until the user replies for *this* batch — silence is not consent, and approval of an earlier batch does not carry forward.
 - **Explain the "why" clearly.** The user should understand the reasoning behind every DROP and UPDATE recommendation, not just see the label.
-- **Apply criteria with teeth, not deference.** Past audits drifted into KEEP-by-default because each memory had *some* tie to the project. The forcing-function test (B.1) is the correction: KEEP requires identifying behavior the memory drives, not just absence of error. When the DROP categories above match, call DROP — don't soften it to UPDATE or stash in KEEP "to be safe."
 - **In genuine doubt, prefer DROP with rationale over silent KEEP.** The user can always override. A KEEP that should have been DROP rarely gets revisited; a proposed DROP gets debated and resolved in seconds. **DROP is not a failure** — moving content to `CLAUDE.local.md`, to a planning doc, or simply deleting it because the code now documents itself is the audit doing its job. This is about doubt over a memory's *value*. Doubt over a *fact you could not check* is different — an unverified claim is a reason to ask, not to delete.
-- **End-of-audit check for broken cross-links.** After DROPs and renames land, grep every memory's full text — not only `Related:` / `References:` lines — for the old filenames. Remove the pointers — broken refs accumulate silently otherwise. Where prose leaned on the dropped memory ("see the related memory"), propose the rewrite as an UPDATE and wait for approval like any other.
