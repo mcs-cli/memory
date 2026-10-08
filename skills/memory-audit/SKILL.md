@@ -27,6 +27,8 @@ Over time, memory files accumulate — some become stale, some duplicate each ot
 
 > **This skill is user-initiated only.** Never run it automatically or as part of another workflow.
 
+> **Without version control.** Every git step applies only when the relevant root — the project for code claims, the memories folder for history — is under version control. Otherwise check the working tree with Grep/Glob, skip `Pending:` handling, and say which you did. Without VCS the working tree is the only state, so a claim missing there is wrong, not pending.
+
 ---
 
 ## Capture Rules
@@ -36,9 +38,9 @@ Apply these rules at audit time. A memory that fails any rule is a candidate for
 <!-- SYNC:capture-rules -->
 Every memory must satisfy all three rules.
 
-- **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify.
+- **Tied to at least one project.** The content must be about the architecture, conventions, bugs, workflows, or tool interactions of at least one real project named in `Applies to:`. Multi-project entries are fine when the same convention genuinely holds across several repos, listed comma-separated. Out of scope: free-floating language, framework, or CLI knowledge with no project anchor — that belongs in the tool's own docs. Public documentation anyone could look up (language reference, framework README, public CLI docs, public API reference) is also out. Internal project docs (Confluence pages, ADRs, RFCs, team wiki) are different: a memory summarizing one *is* project knowledge, provided it links back to the source in `References:`. Test: *"Name the project(s) this applies to and why."* If the answer is "any project, it's just how the tool works" → the memory does not qualify. Every claim must also change how a session works in a project whose sessions read this KB. Listing another project in `Applies to:` does not make its internals relevant: knowledge of another project's internals is cut down to the conclusion that changes work in the reading project. A claim about another project counts as checked only if the session read that project's code, or an internal doc cited in `References:`.
 - **Anonymous.** No personal names, GitHub/Slack handles, or emails anywhere in the memory — not in the problem description, not in examples, not in narration of "who did what." Describe the artifact (the bug, the pattern, the decision), not who touched it. Identifiers age badly and add no signal even in a single-user KB.
-- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, session-level consensus all count), **or** already used consistently in the codebase. Codebase usage is the strongest evidence. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
+- **Project pattern, not personal preference.** Memories must capture what the *project* does, not what an individual engineer likes. A pattern qualifies when any of these hold: it is enforced by lint/formatter config, documented in a style guide or ADR, agreed by the team (written *or* verbal — chat, meeting, or the user stating the agreement in the session), **or** already used consistently in the codebase. Codebase usage is the strongest evidence that a pattern exists, but code written in the same session is no evidence at all: the pattern needs a precedent from before the session, a lint rule or ADR, or a stated agreement. Usage alone does not make the pattern worth a memory, because the code already conveys it — unless new code could break it unnoticed. If the only support is *"I prefer,"* *"I like,"* *"my style,"* it is a preference and does not qualify.
   - **Bad patterns present in the code** are handled by category, not by exclusion. If one engineer flags a pattern as bad without team ratification, the appropriate shape is a `learning_` warning (e.g. `learning_dont_use_X_because_Y`) — **only** when it carries trigger (*"when you use X in case Y…"*), symptom (*"…it leaks / races / drops data"*), and avoidance (*"use Z instead"*). If the team has agreed the pattern is bad and should be avoided or replaced, the team agreement itself makes it a `decision_` (e.g. `decision_architecture_deprecate_X`). Pure *"this should be refactored someday"* observations without that shape belong in the issue tracker.
 <!-- /SYNC -->
 
@@ -103,7 +105,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 #### C.2 Duplication
 - Does this memory overlap significantly with another memory?
 - Could two or more memories be merged into one stronger entry?
-- If overlap is partial and the memories are genuinely distinct (different root causes, different scopes, or different categories like a `learning_` warning next to a `decision_` that resolved it), recommend UPDATE to cross-link them via `Related:` instead of merging.
+- If overlap is partial and the memories are genuinely distinct (different root causes, different scopes, or different categories like a `learning_` warning next to a `decision_` that resolved it), recommend UPDATE to cross-link them via `Related:` instead of merging — one way, from the memory that builds on the other.
 - Search the existing knowledge base or memory files for semantically similar content — two memories may use different names but cover the same ground.
 
 #### C.3 Quality
@@ -117,7 +119,7 @@ If the test fails, recommend DROP — or UPDATE only if a rewrite around the act
 - Use `Glob` to verify that referenced files or modules still exist.
 - If a memory describes a convention (e.g., "all data-access modules implement interface X"), spot-check a few cases to confirm it holds.
 - Do not audit every single line — focus on the **central claim** of the memory. If the core assertion is wrong, recommend DROP or UPDATE.
-- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, the grep may have matched only the memory's own text, or the search may not have run at all — confirm its exit status rather than discarding stderr (for `git grep`, 1 is no match, 128 is an error). When a claim does not match current source, list remote branches with `git rev-parse --symbolic --exclude='*/HEAD' --remotes='*<anchor>*'`, the anchor being a ticket or feature word from the memory, then `git grep` them in a separate call, without fetching — one call per batch, with `-e` per unconfirmed symbol. On a large repo each branch searched costs time, so widen to every branch only when the memory has no anchor, and tell the user the cost first. A hit outside the default branch is unmerged work, not staleness: name the branch in the rationale and ask whether it is still in flight (UPDATE to add `Pending:`) or abandoned. Where you still cannot confirm a symbol, that is the UPDATE-uncertain verdict, not DROP: say in the rationale what you could not confirm, and let the user decide.
+- **An empty grep is not proof the symbol never existed.** It may live on an unmerged branch, the grep may have matched only the memory's own text, or the search may not have run at all — confirm its exit status rather than discarding stderr (for `git grep`, 1 is no match, 128 is an error). When a claim does not match current source, list remote branches with `git rev-parse --symbolic --exclude='*/HEAD' --remotes='*<anchor>*'`, the anchor being a ticket or feature word from the memory, then `git grep` them in a separate call, without fetching — one call per batch, with `-e` per unconfirmed symbol. On a large repo each branch searched costs time, so widen to every branch only when the memory has no anchor, and tell the user the cost first. A hit outside the default branch is unmerged work, not staleness: name the branch in the rationale and ask whether it is still in flight (UPDATE to add `Pending:` naming its PR or ticket) or abandoned. Where you still cannot confirm a symbol, that is the UPDATE-uncertain verdict, not DROP: say in the rationale what you could not confirm, and let the user decide.
 
 #### C.5 Staleness Signals
 - **Line number references** — e.g., `lines 266-296` or `<file>:142`. These break after any edit. Recommend UPDATE to replace with symbol names.
@@ -221,7 +223,7 @@ For UPDATE verdicts, briefly describe what needs to change, and fill **Drives** 
 
 **This is a blocking gate. After printing the verdict table, stop. Do not call any tool. Do not start the next batch. Do not run any `Edit`, `Write`, `Bash(rm)`, or `Bash(mv)`. Wait for the user's reply.**
 
-If a hook propagates memory changes (e.g. an autopush on turn end), say so with the table: approving the batch publishes it.
+If a hook propagates memory changes (e.g. an autopush on turn end), say so with the table: approving the batch publishes it. If the memories folder is not under version control, say so too: DROPs and rewrites are permanent.
 
 The user must explicitly respond before you do anything else. Acceptable signals to proceed:
 - Explicit approval ("approved," "go ahead," "looks good," "yes," "proceed").
@@ -243,6 +245,8 @@ Respect every override without arguing — the user knows their workflow better 
 ### Step 4: Execute Approved Changes
 
 Run only after Step 3 has produced an explicit approval (or per-item decisions) for *this* batch. Apply the user's decisions, not the originally proposed verdicts when they differ.
+
+The per-prompt memory reminder does not apply while auditing: a memory found wrong goes into the batch, not to continuous-learning, and the approved edits below are this skill's own writes.
 
 - **DROP**: Re-read the file and confirm the rationale still holds — for a "covered by X" DROP, that X actually carries the content — then delete it with `Bash(rm <path>)`. If it no longer holds, tell the user before deleting — the approval rested on that rationale.
 - **UPDATE (rename)**: Rename with `Bash(mv <old> <new>)`
