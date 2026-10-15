@@ -384,6 +384,7 @@ ignore:
   - package.json
   - package-lock.json
   - tsconfig.json
+  - biome.json
 
 # ---------------------------------------------------------------------------
 # Templates — CLAUDE.local.md sections

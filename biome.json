@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "hooks/**/*.mts",
+      "scripts/**/*.mts",
+      "tests/**/*.mts",
+      "tests/fixtures/*.json",
+      "config/*.json",
+      "package.json",
+      "tsconfig.json",
+      "biome.json"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "lineWidth": 140 },
+  "javascript": { "formatter": { "arrowParentheses": "asNeeded" } }
+}

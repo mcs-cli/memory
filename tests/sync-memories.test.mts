@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import test from "node:test";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import type { TestContext } from "node:test";
+import test from "node:test";
 import { fixture, qmdStub } from "./helpers.mts";
 
 function indexer(t: TestContext) {
@@ -15,8 +15,15 @@ function indexer(t: TestContext) {
   const lock = `${directory}/.reindex.lock`;
   const run = (mode = "ok", env: NodeJS.ProcessEnv = {}, cwd = f.project) => {
     writeFileSync(calls, "");
-    assert.equal(f.run(`${f.work}/hooks/sync-memories.mts`, {}, { PATH: `${bin}:${process.env.PATH}`, STUB_LOG: calls, STUB_MODE: mode, ...env }, cwd), "");
-    return readFileSync(calls, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+    assert.equal(
+      f.run(`${f.work}/hooks/sync-memories.mts`, {}, { PATH: `${bin}:${process.env.PATH}`, STUB_LOG: calls, STUB_MODE: mode, ...env }, cwd),
+      "",
+    );
+    return readFileSync(calls, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map(line => JSON.parse(line));
   };
   return { ...f, bin, directory, config, log, lock, run };
 }
@@ -31,7 +38,10 @@ for (const linked of [false, true]) {
     }
     for (let i = 0; i < 2; i++) {
       const calls = f.run();
-      assert.deepEqual(calls.map(call => call.args), ["update", "embed", "status", "cleanup"].map(command => ["--index", "memory-loop", command]));
+      assert.deepEqual(
+        calls.map(call => call.args),
+        ["update", "embed", "status", "cleanup"].map(command => ["--index", "memory-loop", command]),
+      );
       assert.ok(calls.every(call => call.config === f.directory && call.index === `${f.directory}/memory-loop.sqlite`));
       assert.equal(existsSync(`${f.directory}/memory-loop.sqlite`), true);
       assert.equal(existsSync(f.log), false);
@@ -69,7 +79,10 @@ test("config replacement leaves other temporary files alone and cleans up after 
   assert.equal(f.run().length, 4);
   assert.match(readFileSync(f.config, "utf8"), /global_context:/);
   assert.equal(readFileSync(`${f.config}.new`, "utf8"), "another writer");
-  assert.deepEqual(readdirSync(f.directory).filter(file => file.endsWith(".new")), ["memory-loop.yml.new"]);
+  assert.deepEqual(
+    readdirSync(f.directory).filter(file => file.endsWith(".new")),
+    ["memory-loop.yml.new"],
+  );
 });
 
 for (const mode of ["update_fails", "embed_fails", "status_fails", "pending"]) {

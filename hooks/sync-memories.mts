@@ -1,6 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
-import { closeSync, mkdirSync, openSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { closeSync, mkdirSync, openSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { attempt, commandExists, isDirectory, projectRoot, read } from "./shared.mts";
 
 const embedModel = "hf:Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf";

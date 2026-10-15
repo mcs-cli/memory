@@ -14,6 +14,8 @@ The consequence that matters most: **nothing here executes from the repo.** Edit
 |---|---|
 | Install development dependencies | `npm ci` |
 | Typecheck | `npm run typecheck` |
+| Lint and check formatting | `npm run lint` (Biome; CI runs it) |
+| Format and apply safe lint fixes | `npm run format` |
 | Run the tests | `npm test` (stubs qmd; no model needed) |
 | Run only the KB gate suite | `node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/kb-gate.test.mts` |
 | Verify the SYNC blocks agree | `npm run check:sync` |

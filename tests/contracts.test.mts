@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import test from "node:test";
-import { fixture, gateFixture, root, flags } from "./helpers.mts";
+import { fixture, flags, gateFixture, root } from "./helpers.mts";
 
 const messages = JSON.parse(readFileSync(`${root}/tests/fixtures/hook-messages.json`, "utf8"));
 const manifest = readFileSync(`${root}/techpack.yaml`, "utf8");
+
+function field(component: string, key: string): string {
+  const value = new RegExp(`${key}: (\\S+)`).exec(component)?.[1];
+  assert.ok(value, `component has no ${key}`);
+  return value;
+}
 
 test("hook messages match the original shell output byte for byte", t => {
   for (const mode of ["enforce", "warn"]) {
@@ -22,20 +28,29 @@ for (const type of ["commonjs", "module"]) {
   test(`manifest hook layout works in a ${type} consumer`, t => {
     const f = fixture(t);
     writeFileSync(`${f.project}/package.json`, JSON.stringify({ type }));
-    const hooks = manifest.split(/^  - id: /m).filter(component => /\n    hookEvent:/.test(component));
+    const hooks = manifest.split(/^ {2}- id: /m).filter(component => /\n {4}hookEvent:/.test(component));
     assert.equal(hooks.length, 10);
-    assert.match(manifest, /hook:\n      source: hooks\/shared.mts\n      destination: shared.mts/);
+    assert.match(manifest, /hook:\n {6}source: hooks\/shared.mts\n {6}destination: shared.mts/);
     const installed = `${f.project}/.claude/hooks/memory`;
     mkdirSync(installed, { recursive: true });
     cpSync(`${root}/hooks/shared.mts`, `${installed}/shared.mts`);
     for (const component of hooks) {
-      const source = component.match(/source: (\S+)/)![1]!;
-      const destination = component.match(/destination: (\S+)/)![1]!;
-      const event = component.match(/hookEvent: (\S+)/)![1]!;
+      const source = field(component, "source");
+      const destination = field(component, "destination");
+      const event = field(component, "hookEvent");
       if (destination === "memory-loop-activator.sh") assert.doesNotMatch(component, /hookInterpreter:/);
       else assert.match(component, /hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning/);
       writeFileSync(`${installed}/${destination}`, readFileSync(`${root}/${source}`, "utf8").replace("__KB_GATE_MODE__", "enforce"));
-      const output = f.run(`${installed}/${destination}`, { hook_event_name: event, session_id: "install", agent_type: "Explore", tool_input: { subagent_type: "Explore", query: "topic", prompt: "KB context: none relevant." } }, { PATH: `${f.work}:/usr/bin:/bin` });
+      const output = f.run(
+        `${installed}/${destination}`,
+        {
+          hook_event_name: event,
+          session_id: "install",
+          agent_type: "Explore",
+          tool_input: { subagent_type: "Explore", query: "topic", prompt: "KB context: none relevant." },
+        },
+        { PATH: `${f.work}:/usr/bin:/bin` },
+      );
       if (destination === "memory-loop-activator.sh") assert.equal(output, messages.activator);
       if (event === "SubagentStart") assert.equal(JSON.parse(output).hookSpecificOutput.hookEventName, event);
     }
@@ -65,6 +80,12 @@ test("the SYNC verifier catches missing and divergent blocks", t => {
 });
 
 test("only the static activator remains a shell script", () => {
-  assert.deepEqual(readdirSync(`${root}/hooks`).filter(file => file.endsWith(".sh")), ["memory-loop-activator.sh"]);
-  assert.equal(readdirSync(`${root}/tests`).some(file => file.endsWith(".sh")), false);
+  assert.deepEqual(
+    readdirSync(`${root}/hooks`).filter(file => file.endsWith(".sh")),
+    ["memory-loop-activator.sh"],
+  );
+  assert.equal(
+    readdirSync(`${root}/tests`).some(file => file.endsWith(".sh")),
+    false,
+  );
 });

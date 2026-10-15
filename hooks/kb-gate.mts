@@ -1,5 +1,16 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { attempt, isDirectory, projectRoot, read } from "./shared.mts";
 
@@ -24,7 +35,11 @@ const USAGE_COMPACT_FLOOR = 50;
 const TODAY = new Date().toISOString().slice(0, 10);
 
 function memorySkill(name: unknown): string | undefined {
-  const skill = String(name ?? "").replace(/^\//, "").split(":").at(-1) ?? "";
+  const skill =
+    String(name ?? "")
+      .replace(/^\//, "")
+      .split(":")
+      .at(-1) ?? "";
   return Object.hasOwn(MEMORY_SKILL_SCOPES, skill) ? skill : undefined;
 }
 
@@ -42,7 +57,10 @@ function readIfExists(file: string): string | undefined {
 }
 
 function rows(file: string): string[][] | undefined {
-  return readIfExists(file)?.split("\n").filter(Boolean).map(line => line.split("\t"));
+  return readIfExists(file)
+    ?.split("\n")
+    .filter(Boolean)
+    .map(line => line.split("\t"));
 }
 
 function isMemory(memories: string, name: string): boolean {
@@ -53,15 +71,15 @@ function parseUsage(content: string): { since: string; dates: Map<string, string
   const dates = new Map<string, string>();
   let since = "";
   const lines = content.split("\n").filter(Boolean);
-  for (const [first, date, ...rest] of lines.map(line => line.split("\t"))) {
-    const header = /^# since: (\S+)$/.exec(first!)?.[1];
+  for (const [first = "", date, ...rest] of lines.map(line => line.split("\t"))) {
+    const header = /^# since: (\S+)$/.exec(first)?.[1];
     if (header && DAY.test(header) && header <= TODAY) {
       if (!since || header < since) since = header;
       continue;
     }
     // A future date would pin a memory as fresh forever, so a skewed clock's row is dropped, not trusted.
     if (!date || rest.length > 0 || !DAY.test(date) || date > TODAY) continue;
-    if (date > (dates.get(first!) ?? "")) dates.set(first!, date);
+    if (date > (dates.get(first) ?? "")) dates.set(first, date);
   }
   return { since, dates, lines: lines.length };
 }
@@ -109,13 +127,15 @@ function gate(): void {
   if (event === "SubagentStart" && !GATED_AGENTS.includes(agentType)) return;
   if (!["UserPromptSubmit", "PostToolUse", "PreToolUse", "SubagentStart"].includes(event)) return;
   const isSkillCall = event === "PostToolUse" && payload.tool_name === "Skill";
-  if (isSkillCall && !memorySkill(payload.tool_input?.skill)) return;
+  const toolSkill = isSkillCall ? memorySkill(payload.tool_input?.skill) : undefined;
+  if (isSkillCall && !toolSkill) return;
   const isRetrieval = event === "PostToolUse" && RETRIEVAL_TOOLS.includes(payload.tool_name);
   const isMemoryWrite = event === "PreToolUse" && MEMORY_WRITE_TOOLS.includes(payload.tool_name);
   const target = payload.tool_input?.file_path || payload.tool_input?.notebook_path || "";
   if (target && !mentionsMemories(target)) return;
   const command = String(payload.tool_input?.command ?? "");
-  const isMemoryDelete = event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
+  const isMemoryDelete =
+    event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
   if (event === "PreToolUse" && payload.tool_name === "Bash" && !isMemoryDelete) return;
 
   const root = projectRoot();
@@ -131,7 +151,12 @@ function gate(): void {
   const turn = /^\d+$/.test(turnText) ? Number(turnText) : 0;
 
   function logEvent(extra: Record<string, unknown>): void {
-    attempt(() => appendFileSync(log, `${JSON.stringify({ ts: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), session, event, mode: MODE, ...extra })}\n`));
+    attempt(() =>
+      appendFileSync(
+        log,
+        `${JSON.stringify({ ts: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), session, event, mode: MODE, ...extra })}\n`,
+      ),
+    );
   }
 
   function output(fields: Record<string, string>): void {
@@ -161,7 +186,10 @@ function gate(): void {
   }
 
   function activeMemorySkill(includeTurnScoped: boolean): string | undefined {
-    return rows(skillsFile)?.find(([at, name]) => MEMORY_SKILL_SCOPES[name!] === "session" || (includeTurnScoped && MEMORY_SKILL_SCOPES[name!] === "turn" && Number(at) === turn))?.[1];
+    return rows(skillsFile)?.find(
+      ([at, name = ""]) =>
+        MEMORY_SKILL_SCOPES[name] === "session" || (includeTurnScoped && MEMORY_SKILL_SCOPES[name] === "turn" && Number(at) === turn),
+    )?.[1];
   }
 
   function memoryName(path: string): string | undefined {
@@ -187,25 +215,22 @@ function gate(): void {
     attempt(() => writeFileSync(denialsFile, ""));
     attempt(() => writeFileSync(turnFile, `${turn + 1}\n`));
     logEvent({ decision: "turn_start", turn: turn + 1 });
-    for (const [, skill] of String(payload.prompt ?? "").matchAll(SLASH_SKILL)) {
-      append(skillsFile, [turn + 1, skill!]);
+    for (const [, skill = ""] of String(payload.prompt ?? "").matchAll(SLASH_SKILL)) {
+      append(skillsFile, [turn + 1, skill]);
       logEvent({ decision: "recorded_skill", skill, source: "prompt" });
     }
     return;
   }
 
-  if (isSkillCall) {
-    const skill = memorySkill(payload.tool_input.skill)!;
-    append(skillsFile, [turn, skill]);
-    logEvent({ decision: "recorded_skill", skill, source: "tool" });
+  if (toolSkill) {
+    append(skillsFile, [turn, toolSkill]);
+    logEvent({ decision: "recorded_skill", skill: toolSkill, source: "tool" });
     return;
   }
 
   if (isRetrieval) {
     if (!isDirectory(memories)) return;
-    const names = target
-      ? [memoryName(target)]
-      : [...stdin.matchAll(RETRIEVED_RESOURCE)].map(match => match[1]);
+    const names = target ? [memoryName(target)] : [...stdin.matchAll(RETRIEVED_RESOURCE)].map(match => match[1]);
     const retrieved = [...new Set(names)].filter((name): name is string => !!name && isMemory(memories, name));
     if (retrieved.length === 0) return;
     const skill = activeMemorySkill(true);
@@ -220,7 +245,10 @@ function gate(): void {
 
   if (event === "PostToolUse") {
     const input = payload.tool_input;
-    const query = (input?.query || (input?.searches ?? []).map((search: { query?: string }) => search.query ?? "").join(" ")).replace(/\n+$/, "");
+    const query = (input?.query || (input?.searches ?? []).map((search: { query?: string }) => search.query ?? "").join(" ")).replace(
+      /\n+$/,
+      "",
+    );
     if (!query) return;
     mkdirSync(state, { recursive: true });
     attempt(() => appendFileSync(queriesFile, `${turn}\t${query}\n`));
@@ -230,7 +258,8 @@ function gate(): void {
 
   if (event === "SubagentStart") {
     if (!isDirectory(memories)) return;
-    output({ additionalContext: `This project keeps a knowledge base of past learnings, decisions, and
+    output({
+      additionalContext: `This project keeps a knowledge base of past learnings, decisions, and
 debugging discoveries in .claude/memories/, searchable with
 mcp__memory-loop__query.
 
@@ -247,7 +276,8 @@ mcp__memory-loop__query.
 - Snippets are leads, not evidence — they are capped at 300 characters and
   often show only a title. mcp__memory-loop__get a document before relying
   on what it says.
-- Report back anything the KB got wrong or left out.` });
+- Report back anything the KB got wrong or left out.`,
+    });
     logEvent({ agent_type: agentType, decision: "briefed" });
     return;
   }
@@ -264,7 +294,11 @@ mcp__memory-loop__query.
     }
     if (agentId) {
       logMemory("deny", { skip_reason: "subagent" });
-      output({ permissionDecision: "deny", permissionDecisionReason: "Sub-agents cannot change .claude/memories/. Report the proposed memory change back instead; the main thread applies it through the continuous-learning or memory-audit skill, which run the search, pre-write and approval checks." });
+      output({
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Sub-agents cannot change .claude/memories/. Report the proposed memory change back instead; the main thread applies it through the continuous-learning or memory-audit skill, which run the search, pre-write and approval checks.",
+      });
       return;
     }
     const skill = activeMemorySkill(isMemoryWrite);
@@ -283,9 +317,12 @@ mcp__memory-loop__query.
     }
     append(denialsFile, [turn, phase]);
     logMemory("deny", { denials_turn: spent.length + 1 });
-    output({ permissionDecision: "deny", permissionDecisionReason: isMemoryWrite
-      ? "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them."
-      : "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning)." });
+    output({
+      permissionDecision: "deny",
+      permissionDecisionReason: isMemoryWrite
+        ? "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them."
+        : "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning).",
+    });
     return;
   }
 
@@ -304,7 +341,15 @@ mcp__memory-loop__query.
   const queries = (attempt(() => read(queriesFile)) ?? "").split("\n").filter(line => line && Number(line.split("\t")[0]) === turn).length;
   const freshQuery = queries > 0;
   function logDecision(satisfied: boolean, decision: string, extra = {}): void {
-    logEvent({ phase: "discovery", agent_type: agentType, fresh_query: freshQuery, had_kb_block: hadKBBlock, satisfied, decision, ...extra });
+    logEvent({
+      phase: "discovery",
+      agent_type: agentType,
+      fresh_query: freshQuery,
+      had_kb_block: hadKBBlock,
+      satisfied,
+      decision,
+      ...extra,
+    });
   }
   if (freshQuery && hadKBBlock) {
     logDecision(true, "allow");
@@ -334,11 +379,16 @@ mcp__memory-loop__query.
     }
     append(denialsFile, [turn, "discovery", queries]);
     logDecision(false, "deny", { denials_turn: denialsTurn + 1, denials_state: denialsState + 1 });
-    output({ permissionDecision: "deny", permissionDecisionReason: `Prerequisite missing: ${missing}. Search the KB with mcp__memory-loop__query first, then re-issue this exact call with a "${KB_MARKER}" block (1-5 bullets of findings, or "${KB_MARKER} none relevant.") at the top of the prompt. Spawning several agents at once: write the findings to a scratchpad file and open each prompt with "${KB_MARKER} see <path>" instead of repeating them. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch.` });
+    output({
+      permissionDecision: "deny",
+      permissionDecisionReason: `Prerequisite missing: ${missing}. Search the KB with mcp__memory-loop__query first, then re-issue this exact call with a "${KB_MARKER}" block (1-5 bullets of findings, or "${KB_MARKER} none relevant.") at the top of the prompt. Spawning several agents at once: write the findings to a scratchpad file and open each prompt with "${KB_MARKER} see <path>" instead of repeating them. Sub-agents cannot see your KB results — unpasted context is rediscovered from scratch.`,
+    });
     return;
   }
   logDecision(false, "warn");
-  output({ additionalContext: `KB protocol: ${missing}. Sub-agents cannot see your KB results, so this agent will rediscover from scratch. Before the next spawn, search the KB and open the prompt with a "${KB_MARKER}" block.` });
+  output({
+    additionalContext: `KB protocol: ${missing}. Sub-agents cannot see your KB results, so this agent will rediscover from scratch. Before the next spawn, search the KB and open the prompt with a "${KB_MARKER}" block.`,
+  });
 }
 
 attempt(gate);

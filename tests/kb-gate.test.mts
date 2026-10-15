@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { denied, gateFixture, root } from "./helpers.mts";
 
@@ -77,7 +77,12 @@ test("both search shapes count, intent alone does not; query text is retained", 
   f.turn();
   f.search({ query: "plain query\nwith tabs\tand trailing newline\n" });
   assert.equal(readFileSync(`${f.state}/session.queries`, "utf8"), "1\tplain query\nwith tabs\tand trailing newline\n");
-  f.search({ searches: [{ type: "lex", query: "counter state" }, { type: "vec", query: "why not wall clock" }] });
+  f.search({
+    searches: [
+      { type: "lex", query: "counter state" },
+      { type: "vec", query: "why not wall clock" },
+    ],
+  });
   assert.match(readFileSync(`${f.state}/session.queries`, "utf8"), /counter state why not wall clock/);
   assert.equal(f.spawn(kb), "");
   f.turn();
@@ -148,7 +153,10 @@ test("logs retain a bounded tail and leave small files in place", t => {
   const inode = statSync(f.log).ino;
   f.turn();
   assert.equal(statSync(f.log).ino, inode);
-  assert.equal(readdirSync(f.state).some(name => name.endsWith(".tmp")), false);
+  assert.equal(
+    readdirSync(f.state).some(name => name.endsWith(".tmp")),
+    false,
+  );
 });
 
 test("an unavailable state directory fails open", t => {
@@ -269,7 +277,13 @@ test("unrelated Bash commands pass without evaluation", t => {
   const f = gateFixture(t);
   f.turn();
   const before = readFileSync(f.log, "utf8");
-  for (const command of ["ls .claude/memories", "rm build/tmp.txt", "docker run --rm memories-image", "grep -rn memories . | wc -l", "cat .claude/memories/a.md | grep rm"]) {
+  for (const command of [
+    "ls .claude/memories",
+    "rm build/tmp.txt",
+    "docker run --rm memories-image",
+    "grep -rn memories . | wc -l",
+    "cat .claude/memories/a.md | grep rm",
+  ]) {
     assert.equal(f.bash(command), "");
   }
   assert.equal(readFileSync(f.log, "utf8"), before);
@@ -310,7 +324,10 @@ test("reads through a symlinked memories dir count under either path", t => {
   f.turn();
   f.readMemory(`${f.work}/repo/memories/learning_a.md`);
   f.readMemory(`${f.project}/.claude/memories/learning_b.md`);
-  assert.equal(readFileSync(`${f.work}/repo/memories/.usage.tsv`, "utf8"), `# since: ${today()}\nlearning_a.md\t${today()}\nlearning_b.md\t${today()}\n`);
+  assert.equal(
+    readFileSync(`${f.work}/repo/memories/.usage.tsv`, "utf8"),
+    `# since: ${today()}\nlearning_a.md\t${today()}\nlearning_b.md\t${today()}\n`,
+  );
 });
 
 test("reads during an audit session or a capture turn are not usage", t => {
@@ -334,7 +351,8 @@ test("reads during an audit session or a capture turn are not usage", t => {
 test("a retrieval appends to a union-merged file without rewriting it", t => {
   const f = gateFixture(t);
   f.memories("learning_a.md", "learning_c.md");
-  const merged = "# since: 2026-01-10\nlearning_a.md\t2026-02-01\n# since: 2025-12-01\nlearning_a.md\t2026-03-05\ngarbage line\nlearning_c.md\t2026-01-01";
+  const merged =
+    "# since: 2026-01-10\nlearning_a.md\t2026-02-01\n# since: 2025-12-01\nlearning_a.md\t2026-03-05\ngarbage line\nlearning_c.md\t2026-01-01";
   writeFileSync(f.usagePath, merged);
   f.turn();
   f.retrieve(["learning_c.md"]);
@@ -349,10 +367,16 @@ test("prompt submit compacts a usage file past its threshold and leaves a small 
   f.turn();
   assert.equal(f.usage(), small);
   const history = Array.from({ length: 60 }, (_, i) => `learning_a.md\t2026-02-${String((i % 28) + 1).padStart(2, "0")}\n`).join("");
-  writeFileSync(f.usagePath, `# since: 2026-01-10\n${history}# since: 2025-12-01\nlearning_gone.md\t2026-03-01\nlearning_b.md\t2999-01-01\ngarbage line\nlearning_c.md\t2026-01-01\n`);
+  writeFileSync(
+    f.usagePath,
+    `# since: 2026-01-10\n${history}# since: 2025-12-01\nlearning_gone.md\t2026-03-01\nlearning_b.md\t2999-01-01\ngarbage line\nlearning_c.md\t2026-01-01\n`,
+  );
   f.turn();
   assert.equal(f.usage(), "# since: 2025-12-01\nlearning_a.md\t2026-02-28\nlearning_c.md\t2026-01-01\n");
-  assert.equal(readdirSync(f.state).some(name => name.endsWith(".tmp")), false);
+  assert.equal(
+    readdirSync(f.state).some(name => name.endsWith(".tmp")),
+    false,
+  );
 });
 
 test("concurrent retrievals record every memory", async t => {
@@ -363,5 +387,8 @@ test("concurrent retrievals record every memory", async t => {
   await Promise.all(names.map(name => f.retrieveConcurrently([name])));
   const lines = f.usage().split("\n").filter(Boolean);
   assert.ok(lines.filter(line => line.startsWith("#")).every(line => line === `# since: ${today()}`));
-  assert.deepEqual(lines.filter(line => !line.startsWith("#")).sort(), names.map(name => `${name}\t${today()}`));
+  assert.deepEqual(
+    lines.filter(line => !line.startsWith("#")).sort(),
+    names.map(name => `${name}\t${today()}`),
+  );
 });

@@ -1,5 +1,5 @@
-import { accessSync, constants, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { accessSync, constants, readFileSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
 export function attempt<T>(action: () => T): T | undefined {
@@ -19,12 +19,13 @@ export function isDirectory(path: string): boolean {
 }
 
 export function commandExists(command: string): boolean {
-  return (process.env.PATH ?? "").split(delimiter).some(directory =>
-    attempt(() => {
-      const path = join(directory, command);
-      accessSync(path, constants.X_OK);
-      return !statSync(path).isDirectory();
-    }) ?? false,
+  return (process.env.PATH ?? "").split(delimiter).some(
+    directory =>
+      attempt(() => {
+        const path = join(directory, command);
+        accessSync(path, constants.X_OK);
+        return !statSync(path).isDirectory();
+      }) ?? false,
   );
 }
 
