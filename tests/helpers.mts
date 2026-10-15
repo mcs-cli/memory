@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn as spawnProcess, spawnSync } from "node:child_process";
 import type { TestContext } from "node:test";
 
 export const root = resolve(import.meta.dirname, "..");
@@ -27,7 +27,20 @@ export function fixture(t: TestContext) {
     assert.equal(result.stderr, "");
     return result.stdout;
   };
-  return { work, project, env, run };
+  const runAsync = (script: string, payload: unknown) => new Promise<{ status: number | null; stdout: string; stderr: string }>(done => {
+    const child = spawnProcess(process.execPath, [...flags, script], { cwd: project, env });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", chunk => (stdout += chunk));
+    child.stderr.on("data", chunk => (stderr += chunk));
+    child.on("close", status => done({ status, stdout, stderr }));
+    child.stdin.end(JSON.stringify(payload));
+  }).then(result => {
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, "");
+    return result.stdout;
+  });
+  return { work, project, env, run, runAsync };
 }
 
 export function gateFixture(t: TestContext, mode = "enforce") {
@@ -36,15 +49,23 @@ export function gateFixture(t: TestContext, mode = "enforce") {
   writeFileSync(script, readFileSync(script, "utf8").replace("__KB_GATE_MODE__", mode));
   const state = `${f.project}/.claude/.kb-gate`;
   const log = `${f.project}/.claude/.kb-gate.log`;
-  const event = (hook_event_name: string, extra = {}) => f.run(script, { hook_event_name, session_id: "session", ...extra });
+  const payload = (hook_event_name: string, extra = {}) => ({ hook_event_name, session_id: "session", ...extra });
+  const event = (hook_event_name: string, extra = {}) => f.run(script, payload(hook_event_name, extra));
   const turn = (prompt = "do the thing") => event("UserPromptSubmit", { prompt });
   const search = (input: unknown = { query: "some topic" }) => event("PostToolUse", { tool_input: input });
   const spawn = (prompt = "find the thing", subagent_type = "Explore", agent_id = "") => event("PreToolUse", { agent_id, tool_input: { subagent_type, prompt } });
   const skill = (name = "continuous-learning") => event("PostToolUse", { tool_name: "Skill", tool_input: { skill: name } });
   const write = ({ file_path = `${f.project}/.claude/memories/learning_x.md`, agent_id = "", tool_name = "Write" } = {}) => event("PreToolUse", { tool_name, agent_id, tool_input: { file_path, content: "x" } });
   const bash = (command: string, agent_id = "") => event("PreToolUse", { tool_name: "Bash", agent_id, tool_input: { command } });
+  const retrieval = (names: string[], tool_name = "mcp__memory-loop__get") => ({ tool_name, tool_input: { file: "#abc123" }, tool_response: names.map(name => ({ type: "text", text: `[Resource from memory-loop at qmd://memories/${name}] <!-- Context -->\n\n1: # Title` })) });
+  const retrieve = (names: string[], tool_name?: string) => event("PostToolUse", retrieval(names, tool_name));
+  const retrieveConcurrently = (names: string[]) => f.runAsync(script, payload("PostToolUse", retrieval(names)));
+  const readMemory = (file_path: string) => event("PostToolUse", { tool_name: "Read", tool_input: { file_path }, tool_response: {} });
+  const memories = (...names: string[]) => names.forEach(name => writeFileSync(`${f.project}/.claude/memories/${name}`, "# x\n"));
+  const usagePath = `${f.project}/.claude/memories/.usage.tsv`;
+  const usage = () => readFileSync(usagePath, "utf8");
   const lastLog = () => JSON.parse(readFileSync(log, "utf8").trim().split("\n").at(-1)!);
-  return { ...f, script, state, log, event, turn, search, spawn, skill, write, bash, lastLog };
+  return { ...f, script, state, log, event, turn, search, spawn, skill, write, bash, retrieve, retrieveConcurrently, readMemory, memories, usagePath, usage, lastLog };
 }
 
 export function denied(output: string): { permissionDecisionReason: string } {

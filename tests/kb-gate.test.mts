@@ -240,11 +240,14 @@ for (const mode of ["warn", "observe", "__KB_GATE_MODE__"]) {
   });
 }
 
-test("off skips memory writes too", t => {
+test("off skips memory writes and records no usage", t => {
   const f = gateFixture(t, "off");
+  f.memories("learning_a.md");
   f.turn();
   assert.equal(f.write(), "");
+  f.retrieve(["learning_a.md"]);
   assert.equal(existsSync(f.state), false);
+  assert.equal(existsSync(f.usagePath), false);
 });
 
 test("deleting or moving memories through Bash needs memory-audit", t => {
@@ -278,4 +281,87 @@ test("sub-agents cannot delete memories even under memory-audit", t => {
   f.skill("memory-audit");
   denied(f.bash("rm .claude/memories/learning_x.md", "agent-3"));
   assert.equal(f.lastLog().skip_reason, "subagent");
+});
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+test("get, multi_get and Read record the day each existing memory was retrieved", t => {
+  const f = gateFixture(t);
+  f.memories("learning_a.md", "decision_b.md", "learning_c.md");
+  f.turn();
+  f.retrieve(["learning_a.md"]);
+  f.retrieve(["decision_b.md", "learning_missing.md"], "mcp__memory-loop__multi_get");
+  f.readMemory(`${f.project}/.claude/memories/learning_c.md`);
+  const recorded = `# since: ${today()}\nlearning_a.md\t${today()}\ndecision_b.md\t${today()}\nlearning_c.md\t${today()}\n`;
+  assert.equal(f.usage(), recorded);
+  assert.deepEqual(f.lastLog().files, ["learning_c.md"]);
+  f.retrieve(["learning_a.md"]);
+  f.readMemory(f.usagePath);
+  f.readMemory(`${f.project}/src/learning_a.md`);
+  assert.equal(f.usage(), recorded);
+});
+
+test("reads through a symlinked memories dir count under either path", t => {
+  const f = gateFixture(t);
+  rmSync(`${f.project}/.claude/memories`, { recursive: true });
+  mkdirSync(`${f.work}/repo/memories`, { recursive: true });
+  symlinkSync(`${f.work}/repo/memories`, `${f.project}/.claude/memories`);
+  f.memories("learning_a.md", "learning_b.md");
+  f.turn();
+  f.readMemory(`${f.work}/repo/memories/learning_a.md`);
+  f.readMemory(`${f.project}/.claude/memories/learning_b.md`);
+  assert.equal(readFileSync(`${f.work}/repo/memories/.usage.tsv`, "utf8"), `# since: ${today()}\nlearning_a.md\t${today()}\nlearning_b.md\t${today()}\n`);
+});
+
+test("reads during an audit session or a capture turn are not usage", t => {
+  const f = gateFixture(t);
+  f.memories("learning_a.md");
+  f.turn();
+  f.skill();
+  f.retrieve(["learning_a.md"]);
+  assert.equal(existsSync(f.usagePath), false);
+  assert.equal(f.lastLog().skip_reason, "memory_skill");
+  f.turn();
+  f.retrieve(["learning_a.md"]);
+  assert.equal(f.usage(), `# since: ${today()}\nlearning_a.md\t${today()}\n`);
+  rmSync(f.usagePath);
+  f.turn("/memory-audit");
+  f.turn("approved");
+  f.retrieve(["learning_a.md"]);
+  assert.equal(existsSync(f.usagePath), false);
+});
+
+test("a retrieval appends to a union-merged file without rewriting it", t => {
+  const f = gateFixture(t);
+  f.memories("learning_a.md", "learning_c.md");
+  const merged = "# since: 2026-01-10\nlearning_a.md\t2026-02-01\n# since: 2025-12-01\nlearning_a.md\t2026-03-05\ngarbage line\nlearning_c.md\t2026-01-01";
+  writeFileSync(f.usagePath, merged);
+  f.turn();
+  f.retrieve(["learning_c.md"]);
+  assert.equal(f.usage(), `${merged}\nlearning_c.md\t${today()}\n`);
+});
+
+test("prompt submit compacts a usage file past its threshold and leaves a small one alone", t => {
+  const f = gateFixture(t);
+  f.memories("learning_a.md", "learning_b.md", "learning_c.md");
+  const small = "# since: 2026-01-10\nlearning_a.md\t2026-02-01\nlearning_a.md\t2026-03-05\n";
+  writeFileSync(f.usagePath, small);
+  f.turn();
+  assert.equal(f.usage(), small);
+  const history = Array.from({ length: 60 }, (_, i) => `learning_a.md\t2026-02-${String((i % 28) + 1).padStart(2, "0")}\n`).join("");
+  writeFileSync(f.usagePath, `# since: 2026-01-10\n${history}# since: 2025-12-01\nlearning_gone.md\t2026-03-01\nlearning_b.md\t2999-01-01\ngarbage line\nlearning_c.md\t2026-01-01\n`);
+  f.turn();
+  assert.equal(f.usage(), "# since: 2025-12-01\nlearning_a.md\t2026-02-28\nlearning_c.md\t2026-01-01\n");
+  assert.equal(readdirSync(f.state).some(name => name.endsWith(".tmp")), false);
+});
+
+test("concurrent retrievals record every memory", async t => {
+  const f = gateFixture(t);
+  const names = Array.from({ length: 12 }, (_, i) => `learning_${String(i).padStart(2, "0")}.md`);
+  f.memories(...names);
+  f.turn();
+  await Promise.all(names.map(name => f.retrieveConcurrently([name])));
+  const lines = f.usage().split("\n").filter(Boolean);
+  assert.ok(lines.filter(line => line.startsWith("#")).every(line => line === `# since: ${today()}`));
+  assert.deepEqual(lines.filter(line => !line.startsWith("#")).sort(), names.map(name => `${name}\t${today()}`));
 });

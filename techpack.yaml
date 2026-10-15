@@ -319,6 +319,18 @@ components:
       source: hooks/kb-gate.mts
       destination: kb-gate.mts
 
+  - id: hook-kb-gate-retrieval
+    displayName: KB gate — record memory retrievals
+    description: Records the day each memory was last retrieved in .claude/memories/.usage.tsv, so a team can see which memories are still read
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
+    hookEvent: PostToolUse
+    hookMatcher: "mcp__memory-loop__get|mcp__memory-loop__multi_get|Read"
+    # Every Read starts this hook, and it never needs to block, so it stays off the turn's critical path.
+    hookAsync: true
+    hook:
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
+
   - id: hook-kb-gate-memory-write
     displayName: KB gate — check memory writes
     description: Blocks writes, deletes and moves in .claude/memories/ unless a memory skill is active

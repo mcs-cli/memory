@@ -16,6 +16,12 @@ const MEMORY_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
 const MAX_MEMORY_WRITE_DENIALS_PER_TURN = 3;
 const MEMORY_DELETE = /(?:^|[^\w-])(?:rm|unlink|mv)(?=\s)/;
 const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
+const RETRIEVAL_TOOLS = ["mcp__memory-loop__get", "mcp__memory-loop__multi_get", "Read"];
+// qmd heads every returned document with this line, which is the only place a docid or glob resolves to a file.
+const RETRIEVED_RESOURCE = /\[Resource from memory-loop at qmd:\/\/memories\/([^\]\s]+\.md)\]/g;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const USAGE_COMPACT_FLOOR = 50;
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function memorySkill(name: unknown): string | undefined {
   const skill = String(name ?? "").replace(/^\//, "").split(":").at(-1) ?? "";
@@ -26,9 +32,75 @@ function realPath(path: string): string {
   return attempt(() => realpathSync(path)) ?? join(attempt(() => realpathSync(dirname(path))) ?? dirname(path), basename(path));
 }
 
+function mentionsMemories(path: string): boolean {
+  const lexical = resolve(path);
+  return lexical.includes("memories") || realPath(lexical).includes("memories");
+}
+
+function readIfExists(file: string): string | undefined {
+  return existsSync(file) ? attempt(() => read(file)) : "";
+}
+
+function rows(file: string): string[][] | undefined {
+  return readIfExists(file)?.split("\n").filter(Boolean).map(line => line.split("\t"));
+}
+
+function isMemory(memories: string, name: string): boolean {
+  return name.endsWith(".md") && attempt(() => statSync(`${memories}/${name}`).isFile()) === true;
+}
+
+function parseUsage(content: string): { since: string; dates: Map<string, string>; lines: number } {
+  const dates = new Map<string, string>();
+  let since = "";
+  const lines = content.split("\n").filter(Boolean);
+  for (const [first, date, ...rest] of lines.map(line => line.split("\t"))) {
+    const header = /^# since: (\S+)$/.exec(first!)?.[1];
+    if (header && DAY.test(header) && header <= TODAY) {
+      if (!since || header < since) since = header;
+      continue;
+    }
+    // A future date would pin a memory as fresh forever, so a skewed clock's row is dropped, not trusted.
+    if (!date || rest.length > 0 || !DAY.test(date) || date > TODAY) continue;
+    if (date > (dates.get(first!) ?? "")) dates.set(first!, date);
+  }
+  return { since, dates, lines: lines.length };
+}
+
+function recordRetrievals(usage: string, retrieved: string[]): string[] {
+  const content = readIfExists(usage) ?? "";
+  const { dates } = parseUsage(content);
+  const fresh = retrieved.filter(name => dates.get(name) !== TODAY);
+  if (fresh.length === 0) return fresh;
+  const header = content ? (content.endsWith("\n") ? "" : "\n") : `# since: ${TODAY}\n`;
+  // One append per hook, never a rewrite, so concurrent hooks cannot erase each other's rows.
+  appendFileSync(usage, `${header}${fresh.map(name => `${name}\t${TODAY}\n`).join("")}`);
+  return fresh;
+}
+
+function compactUsage(usage: string, memories: string, state: string): void {
+  const content = readIfExists(usage);
+  if (!content || content.split("\n").length <= USAGE_COMPACT_FLOOR) return;
+  const { since, dates, lines } = parseUsage(content);
+  if (lines <= Math.max(USAGE_COMPACT_FLOOR, 2 * dates.size)) return;
+  const kept = [...dates.keys()].filter(name => isMemory(memories, name)).sort();
+  const compacted = `# since: ${since || TODAY}\n${kept.map(name => `${name}\t${dates.get(name)}\n`).join("")}`;
+  // Staged outside memories/ so the shared-memories autopush never stages a half-written temp file.
+  const temporary = `${state}/usage.${process.pid}.tmp`;
+  try {
+    // Rows appended while this ran are carried over; a file rewritten under us is left for the next turn.
+    const latest = read(usage);
+    if (!latest.startsWith(content)) return;
+    writeFileSync(temporary, compacted + latest.slice(content.length));
+    renameSync(temporary, usage);
+  } finally {
+    attempt(() => rmSync(temporary, { force: true }));
+  }
+}
+
 function gate(): void {
   if (MODE === "off") return;
-  const payload = JSON.parse(read(0));
+  const stdin = read(0);
+  const payload = JSON.parse(stdin);
   const event = payload.hook_event_name || "";
   const session = String(payload.session_id ?? "unknown").replace(/[^A-Za-z0-9._-]/g, "_");
   const agentId = payload.agent_id || "";
@@ -38,15 +110,17 @@ function gate(): void {
   if (!["UserPromptSubmit", "PostToolUse", "PreToolUse", "SubagentStart"].includes(event)) return;
   const isSkillCall = event === "PostToolUse" && payload.tool_name === "Skill";
   if (isSkillCall && !memorySkill(payload.tool_input?.skill)) return;
+  const isRetrieval = event === "PostToolUse" && RETRIEVAL_TOOLS.includes(payload.tool_name);
   const isMemoryWrite = event === "PreToolUse" && MEMORY_WRITE_TOOLS.includes(payload.tool_name);
   const target = payload.tool_input?.file_path || payload.tool_input?.notebook_path || "";
-  if (isMemoryWrite && !`${resolve(target)}\n${realPath(resolve(target))}`.includes("memories")) return;
+  if (target && !mentionsMemories(target)) return;
   const command = String(payload.tool_input?.command ?? "");
   const isMemoryDelete = event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
   if (event === "PreToolUse" && payload.tool_name === "Bash" && !isMemoryDelete) return;
 
   const root = projectRoot();
   const memories = `${root}/.claude/memories`;
+  const usage = `${memories}/.usage.tsv`;
   const state = `${root}/.claude/.kb-gate`;
   const log = `${root}/.claude/.kb-gate.log`;
   const turnFile = `${state}/${session}.turn`;
@@ -62,11 +136,6 @@ function gate(): void {
 
   function output(fields: Record<string, string>): void {
     process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, ...fields } })}\n`);
-  }
-
-  function rows(file: string): string[][] | undefined {
-    const content = existsSync(file) ? attempt(() => read(file)) : "";
-    return content?.split("\n").filter(Boolean).map(line => line.split("\t"));
   }
 
   function denials(phase: string): string[][] | undefined {
@@ -91,6 +160,18 @@ function gate(): void {
     }
   }
 
+  function activeMemorySkill(includeTurnScoped: boolean): string | undefined {
+    return rows(skillsFile)?.find(([at, name]) => MEMORY_SKILL_SCOPES[name!] === "session" || (includeTurnScoped && MEMORY_SKILL_SCOPES[name!] === "turn" && Number(at) === turn))?.[1];
+  }
+
+  function memoryName(path: string): string | undefined {
+    const lexical = resolve(root, path);
+    if (lexical.startsWith(`${memories}/`)) return lexical.slice(memories.length + 1);
+    const real = realPath(lexical);
+    const memoriesReal = attempt(() => realpathSync(memories)) ?? memories;
+    return real.startsWith(`${memoriesReal}/`) ? real.slice(memoriesReal.length + 1) : undefined;
+  }
+
   if (event === "UserPromptSubmit") {
     mkdirSync(state, { recursive: true });
     if (turn === 0) attempt(() => sweep(state));
@@ -102,6 +183,7 @@ function gate(): void {
       renameSync(`${state}/log.tmp`, log);
     });
     attempt(() => rmSync(`${state}/log.tmp`, { force: true }));
+    attempt(() => compactUsage(usage, memories, state));
     attempt(() => writeFileSync(denialsFile, ""));
     attempt(() => writeFileSync(turnFile, `${turn + 1}\n`));
     logEvent({ decision: "turn_start", turn: turn + 1 });
@@ -116,6 +198,23 @@ function gate(): void {
     const skill = memorySkill(payload.tool_input.skill)!;
     append(skillsFile, [turn, skill]);
     logEvent({ decision: "recorded_skill", skill, source: "tool" });
+    return;
+  }
+
+  if (isRetrieval) {
+    if (!isDirectory(memories)) return;
+    const names = target
+      ? [memoryName(target)]
+      : [...stdin.matchAll(RETRIEVED_RESOURCE)].map(match => match[1]);
+    const retrieved = [...new Set(names)].filter((name): name is string => !!name && isMemory(memories, name));
+    if (retrieved.length === 0) return;
+    const skill = activeMemorySkill(true);
+    if (skill) {
+      logEvent({ tool: payload.tool_name, decision: "skip", skip_reason: "memory_skill", skill });
+      return;
+    }
+    const fresh = recordRetrievals(usage, retrieved);
+    if (fresh.length > 0) logEvent({ tool: payload.tool_name, decision: "retrieved", files: fresh });
     return;
   }
 
@@ -157,11 +256,8 @@ mcp__memory-loop__query.
     const phase = isMemoryWrite ? "memory_write" : "memory_delete";
     let subject = command.slice(0, 200);
     if (isMemoryWrite) {
-      const lexical = resolve(root, target);
-      subject = realPath(lexical);
-      const memoriesReal = attempt(() => realpathSync(memories)) ?? memories;
-      const inside = (path: string, directory: string) => path.startsWith(`${directory}/`);
-      if (!inside(lexical, memories) && !inside(subject, memoriesReal)) return;
+      subject = realPath(resolve(root, target));
+      if (memoryName(target) === undefined) return;
     }
     function logMemory(decision: string, extra = {}): void {
       logEvent({ phase, tool: payload.tool_name, target: subject, agent_type: agentType, decision, ...extra });
@@ -171,7 +267,7 @@ mcp__memory-loop__query.
       output({ permissionDecision: "deny", permissionDecisionReason: "Sub-agents cannot change .claude/memories/. Report the proposed memory change back instead; the main thread applies it through the continuous-learning or memory-audit skill, which run the search, pre-write and approval checks." });
       return;
     }
-    const skill = rows(skillsFile)?.find(([at, name]) => MEMORY_SKILL_SCOPES[name!] === "session" || (isMemoryWrite && MEMORY_SKILL_SCOPES[name!] === "turn" && Number(at) === turn))?.[1];
+    const skill = activeMemorySkill(isMemoryWrite);
     if (skill) {
       logMemory("allow", { skill });
       return;

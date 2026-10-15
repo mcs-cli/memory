@@ -171,6 +171,12 @@ memory/
 
 **[shared-memories](https://github.com/mcs-cli/shared-memories)** extends The Memory Loop by syncing `.claude/memories/` across teammates through a dedicated Git repository. Install both for team-shared memory: `mcs-cli/memory` captures and retrieves knowledge, while `shared-memories` distributes it.
 
+The loop records the day each memory was last retrieved in `.claude/memories/.usage.tsv`, which travels with the memories. `shared-memories` sets up its merge rule for you. If your team commits `.claude/memories/` in the project repo instead, add this line to `.gitattributes` so concurrent updates merge without conflicts:
+
+```
+.claude/memories/.usage.tsv merge=union
+```
+
 ## You might also like
 
 | Pack | Description |
