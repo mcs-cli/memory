@@ -6,6 +6,7 @@ import { fixture, flags, gateFixture, root } from "./helpers.mts";
 
 const messages = JSON.parse(readFileSync(`${root}/tests/fixtures/hook-messages.json`, "utf8"));
 const manifest = readFileSync(`${root}/techpack.yaml`, "utf8");
+const hooks = manifest.split(/^ {2}- id: /m).filter(component => /\n {4}hookEvent:/.test(component));
 
 function field(component: string, key: string): string {
   const value = new RegExp(`${key}: (\\S+)`).exec(component)?.[1];
@@ -24,12 +25,16 @@ test("hook messages match the original shell output byte for byte", t => {
   assert.equal(f.run(`${root}/hooks/memory-loop-activator.sh`), messages.activator);
 });
 
+test("no two hook components share an event and destination", () => {
+  const registrations = hooks.map(component => `${field(component, "hookEvent")} ${field(component, "destination")}`);
+  assert.deepEqual(registrations, [...new Set(registrations)], "mcs keeps one registration per event and command");
+});
+
 for (const type of ["commonjs", "module"]) {
   test(`manifest hook layout works in a ${type} consumer`, t => {
     const f = fixture(t);
     writeFileSync(`${f.project}/package.json`, JSON.stringify({ type }));
-    const hooks = manifest.split(/^ {2}- id: /m).filter(component => /\n {4}hookEvent:/.test(component));
-    assert.equal(hooks.length, 10);
+    assert.equal(hooks.length, 8);
     assert.match(manifest, /hook:\n {6}source: hooks\/shared.mts\n {6}destination: shared.mts/);
     const installed = `${f.project}/.claude/hooks/memory`;
     mkdirSync(installed, { recursive: true });
@@ -54,11 +59,9 @@ for (const type of ["commonjs", "module"]) {
       if (destination === "memory-loop-activator.sh") assert.equal(output, messages.activator);
       if (event === "SubagentStart") assert.equal(JSON.parse(output).hookSpecificOutput.hookEventName, event);
     }
-    assert.match(manifest, /hookMatcher: "Agent\|Task"/);
-    assert.match(manifest, /hookMatcher: "mcp__memory-loop__query"/);
-    assert.match(manifest, /hookMatcher: "Skill"/);
+    assert.match(manifest, /hookMatcher: "Agent\|Task\|Write\|Edit\|NotebookEdit\|Bash"/);
+    assert.match(manifest, /hookMatcher: "mcp__memory-loop__query\|Skill"/);
     assert.match(manifest, /hookMatcher: "mcp__memory-loop__get\|mcp__memory-loop__multi_get\|Read"/);
-    assert.match(manifest, /hookMatcher: "Write\|Edit\|NotebookEdit\|Bash"/);
     assert.equal((manifest.match(/hookAsync: true/g) ?? []).length, 3);
     assert.equal((manifest.match(/hookTimeout: 120/g) ?? []).length, 2);
   });

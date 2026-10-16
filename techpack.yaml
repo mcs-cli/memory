@@ -257,6 +257,10 @@ components:
   # writes behind the skills that run the save checks. Matchers stay broad on
   # purpose — which agent types count as "discovery" is decided in one place, by
   # `GATED_AGENTS` in the script.
+  #
+  # mcs keeps one registration per event and command, so tools on one event share
+  # a matcher; one that needs different hook settings, like the async retrieval
+  # hook, installs the same script under another name.
   - id: hook-kb-gate-turn
     displayName: KB gate — turn boundary
     description: Marks each new prompt so the KB check is required again per turn
@@ -276,16 +280,16 @@ components:
         event: UserPromptSubmit
 
   - id: hook-kb-gate-record
-    displayName: KB gate — record searches
-    description: Records each KB search so delegated discovery can be checked against it
+    displayName: KB gate — record searches and memory skills
+    description: Records each KB search and memory-skill invocation so delegated discovery and memory writes can be checked against them
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
-    hookMatcher: "mcp__memory-loop__query"
+    hookMatcher: "mcp__memory-loop__query|Skill"
     hook:
       source: hooks/kb-gate.mts
       destination: kb-gate.mts
-    # Same reasoning: without this, no search is ever recorded and the gate is
-    # pure friction until the budget releases it.
+    # Same reasoning: without this, no search or skill is ever recorded, so the
+    # gate is pure friction until the budget releases it.
     doctorChecks:
       - type: hookEventExists
         name: "PostToolUse hook registered"
@@ -293,13 +297,13 @@ components:
         event: PostToolUse
 
   - id: hook-kb-gate-check
-    displayName: KB gate — check sub-agent spawns
-    description: Warns or blocks when a discovery sub-agent is spawned without KB findings in its prompt
+    displayName: KB gate — check sub-agent spawns and memory writes
+    description: Checks sub-agent spawns for KB findings and memory changes for an active memory skill
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PreToolUse
     # The spawn tool is `Agent` in current Claude Code and `Task` in older
     # builds. Matching only `Task` silently matches nothing.
-    hookMatcher: "Agent|Task"
+    hookMatcher: "Agent|Task|Write|Edit|NotebookEdit|Bash"
     hook:
       source: hooks/kb-gate.mts
       destination: kb-gate.mts
@@ -308,16 +312,6 @@ components:
         name: "PreToolUse hook registered"
         section: Hooks
         event: PreToolUse
-
-  - id: hook-kb-gate-skill
-    displayName: KB gate — record memory skills
-    description: Records continuous-learning and memory-audit invocations so memory writes can be checked against them
-    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
-    hookEvent: PostToolUse
-    hookMatcher: "Skill"
-    hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
 
   - id: hook-kb-gate-retrieval
     displayName: KB gate — record memory retrievals
@@ -329,17 +323,7 @@ components:
     hookAsync: true
     hook:
       source: hooks/kb-gate.mts
-      destination: kb-gate.mts
-
-  - id: hook-kb-gate-memory-write
-    displayName: KB gate — check memory writes
-    description: Blocks writes, deletes and moves in .claude/memories/ unless a memory skill is active
-    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
-    hookEvent: PreToolUse
-    hookMatcher: "Write|Edit|NotebookEdit|Bash"
-    hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
+      destination: kb-usage.mts
 
   - id: hook-kb-subagent-brief
     displayName: Sub-agent KB brief
