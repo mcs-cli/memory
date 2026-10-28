@@ -75,7 +75,7 @@ Every memory must satisfy all three rules.
 
 ## Extraction Workflow
 
-> **Autonomous by default.** This skill saves memories automatically when the quality gates are met. Never ask the user for permission to save — evaluate, decide, and save silently. *Silently* means without asking; the Step 2 and Step 3 check lines are still printed. Otherwise, only mention saved, corrected or superseded memories in a brief one-line note after the main task response.
+> **Autonomous by default.** This skill saves memories automatically when the quality gates are met. Never ask the user for permission to save — evaluate, decide, and save silently. *Silently* means without asking; the Step 2 and Step 3 check lines are still printed. Otherwise, only mention saved, corrected or superseded memories in a brief one-line note after the main task response. Name there, too, anything skipped only for a missing ship signal (Check 3): `skipped <topic>: not on the default branch, no PR — say if this will ship`.
 
 ### Step 1: Evaluate the Current Task
 
@@ -168,7 +168,7 @@ Scan the drafted content for personal identifiers. Look for `@` characters (hand
 
 Under version control, verify the memory's central claim against the default branch, not only the working tree. Resolve the ref without fetching — `git rev-parse --verify origin/HEAD`, else the local default branch (e.g. `main`, `master`, `develop`) — then `git grep <symbol> <ref>`, or `git show <ref>:<path>` when the claim is not greppable.
 
-**`pending` only when** the change is in flight and has a PR or ticket to name. A claim missing from the default branch with neither is wrong or not ready, not pending — don't save it.
+**`pending` only when** the change has a ship signal: a PR the session created or the user named, or the user saying in the session that the work will ship. A ticket alone is not one — exploratory branches carry tickets too. A claim missing from the default branch without a signal is wrong or not ready, not pending — don't save it. A decision about code the default branch does not have yet needs the same signal, though no grep can fail it; a decision about how existing code works or must be used does not.
 
 **How to write it:** phrase the claim conditionally (*"once X lands…"*) and add `**Pending:** <PR or ticket>` on the line after `Applies to:` — never a branch name or a description of the change. Record what stays true after the merge, not the surface of the unmerged API. Never write *"already migrated"* or *"not merged yet"*; both go stale on merge.
 
