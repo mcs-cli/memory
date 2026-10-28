@@ -75,13 +75,13 @@ Every memory must satisfy all three rules.
 
 ## Extraction Workflow
 
-> **Autonomous by default.** This skill saves memories automatically when the quality gates are met. Never ask the user for permission to save — evaluate, decide, and save silently. *Silently* means without asking; the Step 2 and Step 3 check lines are still printed. Otherwise, only mention saved memories in a brief one-line note after the main task response.
+> **Autonomous by default.** This skill saves memories automatically when the quality gates are met. Never ask the user for permission to save — evaluate, decide, and save silently. *Silently* means without asking; the Step 2 and Step 3 check lines are still printed. Otherwise, only mention saved, corrected or superseded memories in a brief one-line note after the main task response.
 
 ### Step 1: Evaluate the Current Task
 
 Before the final reply of a turn that produced a candidate, evaluate it in two stages.
 
-**Stage A — The forcing-function, the one gate here:** without this memory, would a future session act differently in the project? Non-obvious causes, project decisions, and conventions the code follows without making obvious usually pass. It fails when the current code or a mechanical check already drives the behavior, when the error or compiler message already names the cause, and for a "use X for Y" memory when X is already the dominant way the code does Y. Fail → skip. Otherwise continue to Stage B.
+**Stage A — The forcing-function, the one gate here:** without this memory, would a future session act differently in the project? Non-obvious causes, project decisions, and conventions the code follows without making obvious usually pass. It fails when the current code or a mechanical check already drives the behavior, when the error or compiler message already names the cause, and for a "use X for Y" memory when X is already the dominant way the code does Y. Fail → skip. Otherwise continue to Stage B. A memory read this session that the code contradicts is a candidate too: its corrected text faces this gate as a whole, and failing it makes the memory obsolete (see **Update existing**), not skipped.
 
 **Stage B — The three Capture Rules above are hard gates; all three must pass.** Step 3's Checks 1 and 2 enforce Rule 1's project tie and Rule 2; verify Rule 1's relevance to the reading project, and Rule 3, against the evidence each lists. If any rule fails, rewrite the memory to satisfy it (e.g. anonymize an actor, replace tool-only substance with the actual project anchor) or skip. Do not save partial-fit memories.
 
@@ -107,9 +107,10 @@ is a guess — and the cost of guessing wrong is a duplicate memory or a lost re
 
 Decide what to do, in this order of preference:
 
-1. **Knowledge is already captured.** Skip.
-2. **It shares a trigger with an existing memory** — one you read and judged on-topic, not merely a search hit. Fold it in, following **Update existing** in Step 3, or skip; when unsure, skip. If this session already saved or edited that memory, edit it again only to fix a contradiction.
-3. **It has a different trigger.** Save a new memory only if it passes Stage A on its own: would a future session holding only this text act differently? Otherwise skip. Link the neighbor with `Related:` in the new memory only; edit the neighbor only when it is wrong without the new memory.
+1. **A memory you read is contradicted by Check 3.** Correct it, following **Update existing** in Step 3. A topic the memory covers is not already captured while the memory says something wrong about it.
+2. **Knowledge is already captured.** Skip.
+3. **It shares a trigger with an existing memory** — one you read and judged on-topic, not merely a search hit. Fold it in, following **Update existing** in Step 3, or skip; when unsure, skip. If this session already saved or edited that memory, edit it again only to fix a contradiction.
+4. **It has a different trigger.** Save a new memory only if it passes Stage A on its own: would a future session holding only this text act differently? Otherwise skip. Link the neighbor with `Related:` in the new memory only; edit the neighbor only when it is wrong without the new memory.
 
 When one run yields several candidates, compare them with each other as well as with the KB: candidates that share a trigger are one memory. Each memory that survives runs every check on its own, with its own search and printed lines.
 
@@ -137,10 +138,10 @@ When a memory genuinely applies to multiple projects, list them comma-separated 
 
 #### Mandatory pre-`Write` checks
 
-Run these checks before any `Write` to `<project>/.claude/memories/`, and on the added text before any `Edit`, and print the results as one block. Hidden reasoning is easy to skip; printed output is reviewable.
+Run these checks before any `Write` to `<project>/.claude/memories/`, and on the added text before any `Edit` (for a correction, see **Update existing**), and print the results as one block. Hidden reasoning is easy to skip; printed output is reviewable.
 
 ```
-Drives: <what a future session does differently>     (new memories)
+Drives: <what a future session does differently>     (new memories and corrections)
 Anchors: <every project-specific reference> | Substance: <what is left, one sentence>
 Identifiers: none | rewrote <what> | skipped
 Default branch: holds | pending (<PR or ticket>) | no VCS
@@ -178,11 +179,12 @@ Write(file_path: "<project>/.claude/memories/<category>_<topic>_<specific>.md", 
 
 **Update existing:**
 
-1. Run the checks on the added text. If Check 1 fails, route that text, not the memory.
-2. Fold the new text into the section it belongs to, and rewrite a contradicted or superseded statement where it stands. Never append a section for a refinement or a correction — a `Related:` note is not a correction either. If Check 3 printed `pending`, keep the statement and add the conditional one beside it.
-3. Refresh the rest of the file in the same edit. If its `Pending:` change has merged, fold it in: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Check its backticked symbols with one `git grep` against the default branch, and its `Related:` targets for existence. Report a missing symbol or broken link rather than fixing or deleting it: unlike a statement this session contradicted, a failed grep does not show what the text should now say. Its line in the block:
+1. Run the checks on the added text. If Check 1 fails, route that text, not the memory. A correction — rewriting statements this session did not add — runs them on everything it rewrote, and **Drives** on the whole resulting file.
+2. Fold the new text into the section it belongs to, and rewrite a contradicted or superseded statement where it stands. Never append a section for a refinement or a correction — a `Related:` note is not a correction either. If Check 3 printed `pending`, keep the statement and add the conditional one beside it. A correction rewrites every statement Check 3 contradicts, up to the whole body: a minimal patch around a wrong premise leaves the memory wrong.
+3. If the corrected memory fails Stage A, it is obsolete. Put `**SUPERSEDED** — <what changed; where the truth now lives: a successor memory or the code>` on the line after `Applies to:`, in place of any `Pending:` line. Replace the body only when the memories folder is under version control; otherwise keep it below the line, since it is the only copy. Never delete the file; only memory-audit deletes, with approval.
+4. Refresh the rest of the file in the same edit; skip this step for an obsolete memory. If its `Pending:` change has merged, fold it in: remove the superseded statement, the conditional phrasing, and the `Pending:` line. Check its backticked symbols with one `git grep` against the default branch, and its `Related:` targets for existence. Report a missing symbol or broken link rather than fixing or deleting it: unlike a statement this session contradicted, a failed grep does not show what the text should now say. Its line in the block:
    - **Refresh:** `pending <PR or ticket> merged -> folded` | `pending open` | `no pending` | `pending n/a (no VCS)`; `symbols <held>/<total>` (missing ones named); `links ok` | `links broken: <names>`
-4. After a scripted or multi-part edit, re-read the whole file to catch a broken splice.
+5. After a scripted or multi-part edit, re-read the whole file to catch a broken splice.
 
 ```
 Edit(file_path: "<project>/.claude/memories/<existing_name>.md", old_string: "<section to update>", new_string: "<updated section>")
