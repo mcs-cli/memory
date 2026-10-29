@@ -40,14 +40,24 @@ for (const type of ["commonjs", "module"]) {
     assert.match(manifest, /hook:\n {6}source: hooks\/shared.mts\n {6}destination: shared.mts/);
     const installed = `${f.project}/.claude/hooks/memory`;
     mkdirSync(installed, { recursive: true });
-    cpSync(`${root}/hooks/shared.mts`, `${installed}/shared.mts`);
+    for (const module of ["shared", "kb-gate", "sync-memories"]) {
+      assert.match(manifest, new RegExp(`hook:\\n {6}source: hooks/${module}.mts\\n {6}destination: ${module}.mts`));
+      writeFileSync(
+        `${installed}/${module}.mts`,
+        readFileSync(`${root}/hooks/${module}.mts`, "utf8").replace("__KB_GATE_MODE__", "enforce"),
+      );
+    }
     for (const component of hooks) {
       const source = field(component, "source");
       const destination = field(component, "destination");
       const event = field(component, "hookEvent");
       if (destination === "memory-loop-activator.sh") assert.doesNotMatch(component, /hookInterpreter:/);
-      else assert.match(component, /hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning/);
-      writeFileSync(`${installed}/${destination}`, readFileSync(`${root}/${source}`, "utf8").replace("__KB_GATE_MODE__", "enforce"));
+      else {
+        assert.match(component, /hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning/);
+        // A registered .mts would strip its types on every start, before any launcher could enable the cache.
+        assert.match(destination, /\.mjs$/);
+      }
+      cpSync(`${root}/${source}`, `${installed}/${destination}`);
       const output = f.run(
         `${installed}/${destination}`,
         {
@@ -62,7 +72,7 @@ for (const type of ["commonjs", "module"]) {
       if (event === "SubagentStart") assert.equal(JSON.parse(output).hookSpecificOutput.hookEventName, event);
     }
     assert.match(manifest, /hookMatcher: "Agent\|Task\|Write\|Edit\|NotebookEdit\|Bash"/);
-    assert.match(manifest, /hookEvent: SessionStart\n {4}hookMatcher: "compact"\n {4}hook:\n {6}source: hooks\/kb-gate.mts/);
+    assert.match(manifest, /hookEvent: SessionStart\n {4}hookMatcher: "compact"\n {4}hook:\n {6}source: hooks\/kb-gate.mjs/);
     assert.match(manifest, /hookMatcher: "mcp__memory-loop__query\|Skill"/);
     assert.match(manifest, /hookMatcher: "mcp__memory-loop__get\|mcp__memory-loop__multi_get\|Read"/);
     assert.equal((manifest.match(/hookAsync: true/g) ?? []).length, 3);
