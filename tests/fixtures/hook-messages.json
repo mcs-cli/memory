@@ -21,7 +21,7 @@
   "linked": {
     "hookSpecificOutput": {
       "hookEventName": "PreToolUse",
-      "additionalContext": "Memories not read this turn mention src/app.ts: \"Learning: app\" (learning_app.md). This edit was applied without them; retrieve them with mcp__memory-loop__get and check the edit against them."
+      "additionalContext": "Memories not read this turn mention src/app.ts (1). This edit was applied without them; search the KB for \"src/app.ts\" with mcp__memory-loop__query, retrieve the relevant results with mcp__memory-loop__get, and check the edit against them."
     }
   },
   "activator": "Memory: search the KB before a new phase, and on an unexpected error\nbefore diagnosing it from scratch. Before your final reply, run\nSkill(continuous-learning) once if this turn found a non-obvious cause,\nsettled a project decision the user made or agreed to, or showed a\nmemory is wrong or outdated. Never write .claude/memories/ directly.\n"

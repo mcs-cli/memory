@@ -402,11 +402,11 @@ for (const mode of ["warn", "enforce"]) {
     f.memory("learning_app.md", appRule);
     f.turn();
     const edit = () => f.write({ file_path: `${f.project}/src/app.ts`, tool_name: "Edit" });
-    assert.match(linked(edit()), /mention src\/app\.ts: "Learning: app" \(learning_app\.md\)\./);
+    assert.match(linked(edit()), /^Memories not read this turn mention src\/app\.ts \(1\)\./);
     assert.deepEqual(f.lastLog().files, ["learning_app.md"]);
     assert.equal(edit(), "");
     f.turn();
-    assert.match(linked(edit()), /learning_app\.md/);
+    assert.match(linked(edit()), /\(1\)/);
   });
 }
 
@@ -421,26 +421,15 @@ test("a memory retrieved this turn by get or Read no longer warns, even during c
   assert.equal(f.write({ file_path: `${f.project}/src/app.ts` }), "");
   assert.equal(f.lastLog().skip_reason, "linked_read");
   f.turn();
-  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts` })), /decision_app\.md.*learning_app\.md/);
-});
-
-test("a warning lists three memories, those naming the file in their title or Applies to: first", t => {
-  const f = gateFixture(t);
-  for (const name of ["a", "b", "c"]) f.memory(`learning_${name}.md`, "# Learning\n\nTouches `src/app.ts`.\n");
-  f.memory("learning_z.md", "# Learning: z\n\n**Applies to:** src/app.ts\n");
-  f.memory("learning_y.md", "# Learning: src/app.ts order\n");
-  f.turn();
-  assert.equal(
-    linked(f.write({ file_path: `${f.project}/src/app.ts` })),
-    'Memories not read this turn mention src/app.ts: "Learning: src/app.ts order" (learning_y.md), "Learning: z" (learning_z.md), "Learning" (learning_a.md), and 2 more. This edit was applied without them; retrieve them with mcp__memory-loop__get and check the edit against them; search the KB for "src/app.ts" to see the rest.',
-  );
+  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts` })), /\(2\)/);
+  assert.deepEqual(f.lastLog().files, ["decision_app.md", "learning_app.md"]);
 });
 
 test("sub-agent edits are warned too", t => {
   const f = gateFixture(t);
   f.memory("learning_app.md", appRule);
   f.turn();
-  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts`, agent_id: "agent-1" })), /learning_app\.md/);
+  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts`, agent_id: "agent-1" })), /\(1\)/);
 });
 
 test("observe only logs linked edits; unmatched and outside-root edits leave no trace", t => {
@@ -461,4 +450,15 @@ test("off checks no edits", t => {
   f.turn();
   assert.equal(f.write({ file_path: `${f.project}/src/app.ts` }), "");
   assert.equal(existsSync(f.log), false);
+});
+
+test("a path matches only as a whole path", t => {
+  const f = gateFixture(t);
+  f.memory("learning_nested.md", "# Learning: nested\n\nNever reorder `Tuist/Package.swift`.\n");
+  f.memory("learning_longer.md", "# Learning: longer\n\nSee `Package.swift.bak`.\n");
+  f.turn();
+  assert.equal(f.write({ file_path: `${f.project}/Package.swift` }), "");
+  f.memory("learning_root.md", "# Learning: root\n\nSee ./Package.swift.\n");
+  assert.match(linked(f.write({ file_path: `${f.project}/Package.swift` })), /^Memories not read this turn mention Package\.swift \(1\)\./);
+  assert.deepEqual(f.lastLog().files, ["learning_root.md"]);
 });

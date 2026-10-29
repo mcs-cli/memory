@@ -25,7 +25,6 @@ const GATED_AGENTS = ["Explore", "general-purpose", "Plan"];
 const MEMORY_SKILL_SCOPES: Record<string, "turn" | "session"> = { "continuous-learning": "turn", "memory-audit": "session" };
 const FILE_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
 const MAX_MEMORY_WRITE_DENIALS_PER_TURN = 3;
-const MAX_LINKED_TITLES = 3;
 const MEMORY_DELETE = /(?:^|[^\w-])(?:rm|unlink|mv)(?=\s)/;
 const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
 const RETRIEVAL_TOOLS = ["mcp__memory-loop__get", "mcp__memory-loop__multi_get", "Read"];
@@ -304,35 +303,29 @@ mcp__memory-loop__query.
     if (!path) return;
     const flagged = thisTurn(flaggedFile);
     if (!flagged || flagged.some(([, seen]) => seen === path)) return;
+    // Whole paths only: a longer path ending in this one names a different file.
+    const mention = new RegExp(`(?<![\\w./-])(?:\\./)?${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w/-]|\\.\\w)`);
     const hits = readdirSync(memories)
       .filter(name => isMemory(memories, name))
-      .map(name => ({ name, text: attempt(() => read(`${memories}/${name}`)) ?? "" }))
-      .filter(({ text }) => text.includes(path));
+      .filter(name => {
+        const text = attempt(() => read(`${memories}/${name}`)) ?? "";
+        return text.includes(path) && mention.test(text);
+      });
     if (hits.length === 0) return;
     const readThisTurn = new Set(thisTurn(retrievedFile)?.map(([, name]) => name));
-    const unread = hits.filter(({ name }) => !readThisTurn.has(name));
+    const unread = hits.filter(name => !readThisTurn.has(name));
     function logLinked(decision: string, extra = {}): void {
       logEvent({ phase: "linked_edit", tool: payload.tool_name, target: path, agent_type: agentType, decision, ...extra });
     }
     if (unread.length === 0) {
-      logLinked("allow", { skip_reason: "linked_read", files: hits.map(({ name }) => name) });
+      logLinked("allow", { skip_reason: "linked_read", files: hits });
       return;
     }
     append(flaggedFile, [turn, path]);
-    logLinked(MODE === "observe" ? "observe" : "warn", { files: unread.map(({ name }) => name) });
+    logLinked(MODE === "observe" ? "observe" : "warn", { files: unread });
     if (MODE === "observe") return;
-    const ranked = unread
-      .map(({ name, text }) => {
-        const title = /^# (.+)$/m.exec(text)?.[1]?.trim() || name;
-        const appliesTo = /^\*\*Applies to:\*\*.*$/m.exec(text)?.[0] ?? "";
-        return { name, title, named: title.includes(path) || appliesTo.includes(path) };
-      })
-      // A memory naming the file in its title or Applies to: is most likely about that file.
-      .sort((a, b) => Number(b.named) - Number(a.named) || a.name.localeCompare(b.name));
-    const listed = ranked.slice(0, MAX_LINKED_TITLES).map(({ name, title }) => `"${title}" (${name})`);
-    const more = ranked.length - listed.length;
     output({
-      additionalContext: `Memories not read this turn mention ${path}: ${listed.join(", ")}${more ? `, and ${more} more` : ""}. This edit was applied without them; retrieve them with mcp__memory-loop__get and check the edit against them${more ? `; search the KB for "${path}" to see the rest` : ""}.`,
+      additionalContext: `Memories not read this turn mention ${path} (${unread.length}). This edit was applied without them; search the KB for "${path}" with mcp__memory-loop__query, retrieve the relevant results with mcp__memory-loop__get, and check the edit against them.`,
     });
     return;
   }

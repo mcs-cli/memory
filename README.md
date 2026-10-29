@@ -108,7 +108,7 @@ During installation, the pack asks how strictly it should enforce searching the 
 
 Writes to `.claude/memories/` are gated separately, and in every mode except `off` they are denied unless a memory skill is active. That means `continuous-learning` in the same turn, or `memory-audit` earlier in the session. Deleting or moving a memory from the shell is allowed only under `memory-audit`. This keeps every save behind the skill's search and pre-write checks.
 
-Edits to other files are checked against the memories that mention them. When a memory names the edited file's project-relative path and hasn't been read this turn, Claude is told which memories to read before relying on the edit. This happens in `warn` and `enforce` alike, and never blocks the edit. `observe` only logs it.
+Edits to other files are checked against the memories that mention them. When a memory names the edited file's project-relative path and hasn't been read this turn, Claude is told how many memories mention the file and to search the knowledge base for its path, then check the edit against what it finds. This happens in `warn` and `enforce` alike, and never blocks the edit. `observe` only logs it.
 
 To change the mode, run `mcs sync` again. The selection is baked into the installed hook rather than read from a runtime setting.
 
