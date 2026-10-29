@@ -36,7 +36,7 @@ for (const type of ["commonjs", "module"]) {
   test(`manifest hook layout works in a ${type} consumer`, t => {
     const f = fixture(t);
     writeFileSync(`${f.project}/package.json`, JSON.stringify({ type }));
-    assert.equal(hooks.length, 8);
+    assert.equal(hooks.length, 9);
     assert.match(manifest, /hook:\n {6}source: hooks\/shared.mts\n {6}destination: shared.mts/);
     const installed = `${f.project}/.claude/hooks/memory`;
     mkdirSync(installed, { recursive: true });
@@ -62,8 +62,9 @@ for (const type of ["commonjs", "module"]) {
       if (event === "SubagentStart") assert.equal(JSON.parse(output).hookSpecificOutput.hookEventName, event);
     }
     assert.match(manifest, /hookMatcher: "Agent\|Task\|Write\|Edit\|NotebookEdit\|Bash"/);
-    assert.match(manifest, /hookMatcher: "mcp__memory-loop__query\|mcp__memory-loop__get\|mcp__memory-loop__multi_get\|Skill"/);
-    assert.match(manifest, /hookMatcher: "Read"/);
+    assert.match(manifest, /hookEvent: SessionStart\n {4}hookMatcher: "compact"\n {4}hook:\n {6}source: hooks\/kb-gate.mts/);
+    assert.match(manifest, /hookMatcher: "mcp__memory-loop__query\|Skill"/);
+    assert.match(manifest, /hookMatcher: "mcp__memory-loop__get\|mcp__memory-loop__multi_get\|Read"/);
     assert.equal((manifest.match(/hookAsync: true/g) ?? []).length, 3);
     assert.equal((manifest.match(/hookTimeout: 120/g) ?? []).length, 2);
   });

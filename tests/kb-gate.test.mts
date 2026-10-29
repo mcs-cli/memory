@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import test from "node:test";
-import { denied, gateFixture, root } from "./helpers.mts";
+import { denied, gateFixture, linked, root } from "./helpers.mts";
 
 const kb = "KB context: none relevant.";
 
@@ -394,42 +394,84 @@ test("concurrent retrievals record every memory", async t => {
 });
 
 const appRule = "# Learning: app\n\nNever reorder `src/app.ts`.\n";
-const linked = (output: string): string => JSON.parse(output).hookSpecificOutput.additionalContext;
 
 for (const mode of ["warn", "enforce"]) {
-  test(`${mode} warns once per path per turn about unread memories that mention an edited file`, t => {
+  test(`${mode} warns once per path per turn about memories that mention an edited file`, t => {
     const f = gateFixture(t, mode);
     f.memory("learning_app.md", appRule);
     f.turn();
     const edit = () => f.write({ file_path: `${f.project}/src/app.ts`, tool_name: "Edit" });
-    assert.match(linked(edit()), /^Memories not read this turn mention src\/app\.ts \(1\)\./);
+    assert.match(linked(edit()), /^A memory mentions src\/app\.ts,/);
     assert.deepEqual(f.lastLog().files, ["learning_app.md"]);
     assert.equal(edit(), "");
     f.turn();
-    assert.match(linked(edit()), /\(1\)/);
+    assert.match(linked(edit()), /^A memory mentions/);
   });
 }
 
-test("a memory retrieved this turn by get or Read no longer warns, even during capture", t => {
+test("a KB search for the file silences the note until the next compaction; reading a memory does not", t => {
   const f = gateFixture(t);
   f.memory("learning_app.md", appRule);
   f.memory("decision_app.md", "# Decision: app\n\nSee src/app.ts.\n");
+  const edit = () => f.write({ file_path: `${f.project}/src/app.ts` });
   f.turn();
-  f.skill();
   f.retrieve(["learning_app.md"]);
   f.readMemory(`${f.project}/.claude/memories/decision_app.md`);
-  assert.equal(f.write({ file_path: `${f.project}/src/app.ts` }), "");
-  assert.equal(f.lastLog().skip_reason, "linked_read");
+  assert.match(linked(edit()), /^2 memories mention src\/app\.ts/);
   f.turn();
-  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts` })), /\(2\)/);
-  assert.deepEqual(f.lastLog().files, ["decision_app.md", "learning_app.md"]);
+  f.search({ query: "app" });
+  assert.match(linked(edit()), /^2 memories/);
+  f.turn();
+  f.search({ searches: [{ type: "lex", query: "SRC/APP.TS" }] });
+  assert.equal(edit(), "");
+  assert.equal(f.lastLog().skip_reason, "linked_searched");
+  f.turn();
+  assert.equal(edit(), "");
+  f.event("SessionStart", { source: "startup" });
+  f.turn();
+  assert.equal(edit(), "");
+  f.event("SessionStart", { source: "compact" });
+  assert.equal(f.lastLog().decision, "compacted");
+  f.turn();
+  assert.match(linked(edit()), /^2 memories/);
+  f.search({ query: "what src/app.ts orders" });
+  f.turn();
+  assert.equal(edit(), "");
+});
+
+test("a multi-word file name matches memories that name it; a one-word name does not", t => {
+  const f = gateFixture(t);
+  f.memory("learning_hermes.md", "# Learning: hermes\n\n`HermesManager.init` must run on main.\n");
+  f.memory("learning_tests.md", "# Learning: tests\n\nSee `HermesManagerTests`.\n");
+  f.memory("learning_index.md", "# Learning: index\n\nThe search index is rebuilt nightly.\n");
+  f.turn();
+  assert.match(
+    linked(f.write({ file_path: `${f.project}/Sources/Support/HermesManager.swift` })),
+    /^A memory mentions HermesManager, and .* a lex line for "HermesManager" and a vec line/,
+  );
+  assert.deepEqual(f.lastLog().files, ["learning_hermes.md"]);
+  assert.equal(f.write({ file_path: `${f.project}/src/index.ts` }), "");
+  f.search({ query: "how does hermesmanager start" });
+  assert.equal(f.write({ file_path: `${f.project}/Sources/Other/user_service.py` }), "");
 });
 
 test("sub-agent edits are warned too", t => {
   const f = gateFixture(t);
   f.memory("learning_app.md", appRule);
   f.turn();
-  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts`, agent_id: "agent-1" })), /\(1\)/);
+  assert.match(linked(f.write({ file_path: `${f.project}/src/app.ts`, agent_id: "agent-1" })), /^A memory mentions/);
+});
+
+test("at most three notes per turn; later matches are only logged", t => {
+  const f = gateFixture(t);
+  for (const name of ["a", "b", "c", "d"]) f.memory(`learning_${name}.md`, `# Learning: ${name}\n\nSee src/${name}.ts.\n`);
+  f.turn();
+  for (const name of ["a", "b", "c"])
+    assert.match(linked(f.write({ file_path: `${f.project}/src/${name}.ts` })), new RegExp(`src/${name}\\.ts`));
+  assert.equal(f.write({ file_path: `${f.project}/src/d.ts` }), "");
+  assert.equal(f.lastLog().skip_reason, "linked_cap");
+  f.turn();
+  assert.match(linked(f.write({ file_path: `${f.project}/src/d.ts` })), /src\/d\.ts/);
 });
 
 test("observe only logs linked edits; unmatched and outside-root edits leave no trace", t => {
@@ -444,14 +486,6 @@ test("observe only logs linked edits; unmatched and outside-root edits leave no 
   assert.equal(readFileSync(f.log, "utf8"), before);
 });
 
-test("off checks no edits", t => {
-  const f = gateFixture(t, "off");
-  f.memory("learning_app.md", appRule);
-  f.turn();
-  assert.equal(f.write({ file_path: `${f.project}/src/app.ts` }), "");
-  assert.equal(existsSync(f.log), false);
-});
-
 test("a path matches only as a whole path", t => {
   const f = gateFixture(t);
   f.memory("learning_nested.md", "# Learning: nested\n\nNever reorder `Tuist/Package.swift`.\n");
@@ -459,6 +493,6 @@ test("a path matches only as a whole path", t => {
   f.turn();
   assert.equal(f.write({ file_path: `${f.project}/Package.swift` }), "");
   f.memory("learning_root.md", "# Learning: root\n\nSee ./Package.swift.\n");
-  assert.match(linked(f.write({ file_path: `${f.project}/Package.swift` })), /^Memories not read this turn mention Package\.swift \(1\)\./);
+  assert.match(linked(f.write({ file_path: `${f.project}/Package.swift` })), /^A memory mentions Package\.swift,/);
   assert.deepEqual(f.lastLog().files, ["learning_root.md"]);
 });

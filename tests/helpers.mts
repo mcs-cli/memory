@@ -108,6 +108,10 @@ export function gateFixture(t: TestContext, mode = "enforce") {
   };
 }
 
+export function linked(output: string): string {
+  return JSON.parse(output).hookSpecificOutput.additionalContext;
+}
+
 export function denied(output: string): { permissionDecisionReason: string } {
   const decision = JSON.parse(output).hookSpecificOutput;
   assert.equal(decision.permissionDecision, "deny");

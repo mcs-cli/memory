@@ -280,12 +280,11 @@ components:
         event: UserPromptSubmit
 
   - id: hook-kb-gate-record
-    displayName: KB gate — record searches, memory skills and retrievals
-    description: Records each KB search, memory-skill invocation and memory retrieval so delegated discovery, memory writes and file edits can be checked against them
+    displayName: KB gate — record searches and memory skills
+    description: Records each KB search and memory-skill invocation so delegated discovery, memory writes and file edits can be checked against them
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
-    # Retrievals are synchronous here so an edit made right after one already sees it as read.
-    hookMatcher: "mcp__memory-loop__query|mcp__memory-loop__get|mcp__memory-loop__multi_get|Skill"
+    hookMatcher: "mcp__memory-loop__query|Skill"
     hook:
       source: hooks/kb-gate.mts
       destination: kb-gate.mts
@@ -314,13 +313,23 @@ components:
         section: Hooks
         event: PreToolUse
 
+  - id: hook-kb-gate-compact
+    displayName: KB gate — mark compactions
+    description: Marks where the conversation was compacted, so file-edit notes only count KB searches still in context
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
+    hookEvent: SessionStart
+    hookMatcher: "compact"
+    hook:
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
+
   - id: hook-kb-gate-retrieval
-    displayName: KB gate — record memory reads
-    description: Records memories opened with Read, for .claude/memories/.usage.tsv and for the file-edit check
+    displayName: KB gate — record memory retrievals
+    description: Records the day each memory was last retrieved in .claude/memories/.usage.tsv, so a team can see which memories are still read
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
-    hookMatcher: "Read"
-    # Every Read starts this hook, so it stays off the turn's critical path.
+    hookMatcher: "mcp__memory-loop__get|mcp__memory-loop__multi_get|Read"
+    # Every Read starts this hook, and it never needs to block, so it stays off the turn's critical path.
     hookAsync: true
     hook:
       source: hooks/kb-gate.mts
