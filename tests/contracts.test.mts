@@ -20,6 +20,8 @@ test("hook messages match the original shell output byte for byte", t => {
     f.turn();
     assert.equal(f.spawn(), `${JSON.stringify(messages[mode])}\n`);
     assert.equal(f.event("SubagentStart", { agent_type: "Explore" }), `${JSON.stringify(messages.brief)}\n`);
+    f.memory("learning_app.md", "# Learning: app\n\nNever reorder `src/app.ts`.\n");
+    assert.equal(f.write({ file_path: `${f.project}/src/app.ts`, tool_name: "Edit" }), `${JSON.stringify(messages.linked)}\n`);
   }
   const f = fixture(t);
   assert.equal(f.run(`${root}/hooks/memory-loop-activator.sh`), messages.activator);
@@ -60,8 +62,8 @@ for (const type of ["commonjs", "module"]) {
       if (event === "SubagentStart") assert.equal(JSON.parse(output).hookSpecificOutput.hookEventName, event);
     }
     assert.match(manifest, /hookMatcher: "Agent\|Task\|Write\|Edit\|NotebookEdit\|Bash"/);
-    assert.match(manifest, /hookMatcher: "mcp__memory-loop__query\|Skill"/);
-    assert.match(manifest, /hookMatcher: "mcp__memory-loop__get\|mcp__memory-loop__multi_get\|Read"/);
+    assert.match(manifest, /hookMatcher: "mcp__memory-loop__query\|mcp__memory-loop__get\|mcp__memory-loop__multi_get\|Skill"/);
+    assert.match(manifest, /hookMatcher: "Read"/);
     assert.equal((manifest.match(/hookAsync: true/g) ?? []).length, 3);
     assert.equal((manifest.match(/hookTimeout: 120/g) ?? []).length, 2);
   });

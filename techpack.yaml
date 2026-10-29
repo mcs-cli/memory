@@ -280,11 +280,12 @@ components:
         event: UserPromptSubmit
 
   - id: hook-kb-gate-record
-    displayName: KB gate — record searches and memory skills
-    description: Records each KB search and memory-skill invocation so delegated discovery and memory writes can be checked against them
+    displayName: KB gate — record searches, memory skills and retrievals
+    description: Records each KB search, memory-skill invocation and memory retrieval so delegated discovery, memory writes and file edits can be checked against them
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
-    hookMatcher: "mcp__memory-loop__query|Skill"
+    # Retrievals are synchronous here so an edit made right after one already sees it as read.
+    hookMatcher: "mcp__memory-loop__query|mcp__memory-loop__get|mcp__memory-loop__multi_get|Skill"
     hook:
       source: hooks/kb-gate.mts
       destination: kb-gate.mts
@@ -297,8 +298,8 @@ components:
         event: PostToolUse
 
   - id: hook-kb-gate-check
-    displayName: KB gate — check sub-agent spawns and memory writes
-    description: Checks sub-agent spawns for KB findings and memory changes for an active memory skill
+    displayName: KB gate — check sub-agent spawns, memory writes and file edits
+    description: Checks sub-agent spawns for KB findings, memory changes for an active memory skill, and file edits for memories that mention the file
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PreToolUse
     # The spawn tool is `Agent` in current Claude Code and `Task` in older
@@ -314,12 +315,12 @@ components:
         event: PreToolUse
 
   - id: hook-kb-gate-retrieval
-    displayName: KB gate — record memory retrievals
-    description: Records the day each memory was last retrieved in .claude/memories/.usage.tsv, so a team can see which memories are still read
+    displayName: KB gate — record memory reads
+    description: Records memories opened with Read, for .claude/memories/.usage.tsv and for the file-edit check
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
-    hookMatcher: "mcp__memory-loop__get|mcp__memory-loop__multi_get|Read"
-    # Every Read starts this hook, and it never needs to block, so it stays off the turn's critical path.
+    hookMatcher: "Read"
+    # Every Read starts this hook, so it stays off the turn's critical path.
     hookAsync: true
     hook:
       source: hooks/kb-gate.mts
