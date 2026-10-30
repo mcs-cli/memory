@@ -11,7 +11,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { attempt, isDirectory, projectRoot, read } from "./shared.mts";
 
 const MODE: string = "__KB_GATE_MODE__";
@@ -23,8 +23,9 @@ const STATE_MAX_AGE_DAYS = 7;
 const KB_MARKER = "KB context:";
 const GATED_AGENTS = ["Explore", "general-purpose", "Plan"];
 const MEMORY_SKILL_SCOPES: Record<string, "turn" | "session"> = { "continuous-learning": "turn", "memory-audit": "session" };
-const MEMORY_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
+const FILE_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
 const MAX_MEMORY_WRITE_DENIALS_PER_TURN = 3;
+const MAX_LINKED_NOTES_PER_TURN = 3;
 const MEMORY_DELETE = /(?:^|[^\w-])(?:rm|unlink|mv)(?=\s)/;
 const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
 const RETRIEVAL_TOOLS = ["mcp__memory-loop__get", "mcp__memory-loop__multi_get", "Read"];
@@ -50,6 +51,10 @@ function realPath(path: string): string {
 function mentionsMemories(path: string): boolean {
   const lexical = resolve(path);
   return lexical.includes("memories") || realPath(lexical).includes("memories");
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function readIfExists(file: string): string | undefined {
@@ -125,14 +130,15 @@ function gate(): void {
   const agentType = payload.tool_input?.subagent_type || payload.agent_type || "";
   const hadKBBlock = (payload.tool_input?.prompt || "").includes(KB_MARKER);
   if (event === "SubagentStart" && !GATED_AGENTS.includes(agentType)) return;
-  if (!["UserPromptSubmit", "PostToolUse", "PreToolUse", "SubagentStart"].includes(event)) return;
+  if (!["UserPromptSubmit", "PostToolUse", "PreToolUse", "SubagentStart", "SessionStart"].includes(event)) return;
+  if (event === "SessionStart" && payload.source !== "compact") return;
   const isSkillCall = event === "PostToolUse" && payload.tool_name === "Skill";
   const toolSkill = isSkillCall ? memorySkill(payload.tool_input?.skill) : undefined;
   if (isSkillCall && !toolSkill) return;
   const isRetrieval = event === "PostToolUse" && RETRIEVAL_TOOLS.includes(payload.tool_name);
-  const isMemoryWrite = event === "PreToolUse" && MEMORY_WRITE_TOOLS.includes(payload.tool_name);
+  const isFileWrite = event === "PreToolUse" && FILE_WRITE_TOOLS.includes(payload.tool_name);
   const target = payload.tool_input?.file_path || payload.tool_input?.notebook_path || "";
-  if (target && !mentionsMemories(target)) return;
+  if (target && !isFileWrite && !mentionsMemories(target)) return;
   const command = String(payload.tool_input?.command ?? "");
   const isMemoryDelete =
     event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
@@ -147,6 +153,8 @@ function gate(): void {
   const queriesFile = `${state}/${session}.queries`;
   const denialsFile = `${state}/${session}.denials`;
   const skillsFile = `${state}/${session}.skills`;
+  const flaggedFile = `${state}/${session}.flagged`;
+  const compactedFile = `${state}/${session}.compacted`;
   const turnText = (attempt(() => read(turnFile)) ?? "").split("\n")[0]?.trim() ?? "";
   const turn = /^\d+$/.test(turnText) ? Number(turnText) : 0;
 
@@ -163,8 +171,12 @@ function gate(): void {
     process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, ...fields } })}\n`);
   }
 
+  function thisTurn(file: string): string[][] | undefined {
+    return rows(file)?.filter(([at]) => Number(at) === turn);
+  }
+
   function denials(phase: string): string[][] | undefined {
-    return rows(denialsFile)?.filter(fields => Number(fields[0]) === turn && fields[1] === phase);
+    return thisTurn(denialsFile)?.filter(fields => fields[1] === phase);
   }
 
   function append(file: string, fields: (string | number)[]): void {
@@ -192,13 +204,20 @@ function gate(): void {
     )?.[1];
   }
 
-  function memoryName(path: string): string | undefined {
+  function under(base: string, path: string): string | undefined {
     const lexical = resolve(root, path);
-    if (lexical.startsWith(`${memories}/`)) return lexical.slice(memories.length + 1);
-    const real = realPath(lexical);
-    const memoriesReal = attempt(() => realpathSync(memories)) ?? memories;
-    return real.startsWith(`${memoriesReal}/`) ? real.slice(memoriesReal.length + 1) : undefined;
+    const baseReal = attempt(() => realpathSync(base)) ?? base;
+    // Either spelling may be the one under the base: a new file has no real path yet, a symlinked base no lexical one.
+    return [relative(base, lexical), relative(baseReal, realPath(lexical))].find(
+      candidate => candidate && !/^\.\.(?:\/|$)/.test(candidate) && !isAbsolute(candidate),
+    );
   }
+
+  function memoryName(path: string): string | undefined {
+    return under(memories, path);
+  }
+
+  const isMemoryWrite = isFileWrite && memoryName(target) !== undefined;
 
   if (event === "UserPromptSubmit") {
     mkdirSync(state, { recursive: true });
@@ -219,6 +238,14 @@ function gate(): void {
       append(skillsFile, [turn + 1, skill]);
       logEvent({ decision: "recorded_skill", skill, source: "prompt" });
     }
+    return;
+  }
+
+  if (event === "SessionStart") {
+    // A row count into the append-only queries file: searches before it were summarized away by the compaction.
+    mkdirSync(state, { recursive: true });
+    attempt(() => writeFileSync(compactedFile, `${rows(queriesFile)?.length ?? 0}\n`));
+    logEvent({ decision: "compacted" });
     return;
   }
 
@@ -282,13 +309,66 @@ mcp__memory-loop__query.
     return;
   }
 
+  if (isFileWrite && !isMemoryWrite) {
+    if (!isDirectory(memories)) return;
+    const path = under(root, target);
+    if (!path) return;
+    const flagged = thisTurn(flaggedFile);
+    if (!flagged || flagged.some(([, seen]) => seen === path)) return;
+    const name = basename(path).replace(/\.[^.]+$/, "");
+    // Memories name types and modules more often than paths. A one-word name like `index` or `utils`
+    // turns up in prose everywhere, so only a name of two or more words is distinctive enough to match.
+    const distinctive = name.split(/[_.-]+|(?<=[a-z0-9])(?=[A-Z])/).filter(Boolean).length >= 2;
+    // Whole paths only: a longer path ending in this one names a different file.
+    const byPath = new RegExp(`(?<![\\w./-])(?:\\./)?${escapeRegExp(path)}(?![\\w/-]|\\.\\w)`);
+    const byName = new RegExp(`(?<![\\w-])${escapeRegExp(name)}(?![\\w-])`);
+    const matches = readdirSync(memories)
+      .filter(file => isMemory(memories, file))
+      .map(file => {
+        const text = attempt(() => read(`${memories}/${file}`)) ?? "";
+        const viaPath = text.includes(path) && byPath.test(text);
+        return { file, viaPath, hit: viaPath || (distinctive && text.includes(name) && byName.test(text)) };
+      })
+      .filter(({ hit }) => hit);
+    if (matches.length === 0) return;
+    const hits = matches.map(({ file }) => file);
+    const term = matches.some(({ viaPath }) => viaPath) ? path : name;
+    function logLinked(decision: string, extra = {}): void {
+      logEvent({
+        phase: "linked_edit",
+        tool: payload.tool_name,
+        target: path,
+        term,
+        agent_type: agentType,
+        decision,
+        files: hits,
+        ...extra,
+      });
+    }
+    // Any search since the last compaction counts: its results are still in context, whichever turn ran it.
+    const compactedAt = Number(attempt(() => read(compactedFile).trim())) || 0;
+    const searches = (rows(queriesFile) ?? []).slice(compactedAt).map(([, ...query]) => query.join("\t").toLowerCase());
+    const searched = [...new Set([term, ...(distinctive ? [name] : [])])].map(text => text.toLowerCase());
+    if (searches.some(query => searched.some(text => query.includes(text)))) {
+      logLinked("allow", { skip_reason: "linked_searched" });
+      return;
+    }
+    if (flagged.length >= MAX_LINKED_NOTES_PER_TURN) {
+      logLinked("allow", { skip_reason: "linked_cap" });
+      return;
+    }
+    append(flaggedFile, [turn, path]);
+    logLinked(MODE === "observe" ? "observe" : "warn");
+    if (MODE === "observe") return;
+    output({
+      additionalContext: `${hits.length === 1 ? "A memory mentions" : `${hits.length} memories mention`} ${term}, and the KB has not been searched for it since the session began or was last compacted. This edit was applied without them: search the KB with a lex line for "${term}" and a vec line saying what this edit changes and why, retrieve the relevant results with mcp__memory-loop__get, and check the edit against them.`,
+    });
+    return;
+  }
+
   if (isMemoryWrite || isMemoryDelete) {
     const phase = isMemoryWrite ? "memory_write" : "memory_delete";
-    let subject = command.slice(0, 200);
-    if (isMemoryWrite) {
-      subject = realPath(resolve(root, target));
-      if (memoryName(target) === undefined) return;
-    }
+    const subject = isMemoryWrite ? realPath(resolve(root, target)) : command.slice(0, 200);
     function logMemory(decision: string, extra = {}): void {
       logEvent({ phase, tool: payload.tool_name, target: subject, agent_type: agentType, decision, ...extra });
     }
@@ -338,7 +418,7 @@ mcp__memory-loop__query.
     logEvent({ decision: "skip", skip_reason: "no_memories_dir" });
     return;
   }
-  const queries = (attempt(() => read(queriesFile)) ?? "").split("\n").filter(line => line && Number(line.split("\t")[0]) === turn).length;
+  const queries = thisTurn(queriesFile)?.length ?? 0;
   const freshQuery = queries > 0;
   function logDecision(satisfied: boolean, decision: string, extra = {}): void {
     logEvent({

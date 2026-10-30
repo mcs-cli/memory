@@ -74,8 +74,9 @@ export function gateFixture(t: TestContext, mode = "enforce") {
   const retrieve = (names: string[], tool_name?: string) => event("PostToolUse", retrieval(names, tool_name));
   const retrieveConcurrently = (names: string[]) => f.runAsync(script, payload("PostToolUse", retrieval(names)));
   const readMemory = (file_path: string) => event("PostToolUse", { tool_name: "Read", tool_input: { file_path }, tool_response: {} });
+  const memory = (name: string, text: string) => writeFileSync(`${f.project}/.claude/memories/${name}`, text);
   const memories = (...names: string[]) => {
-    for (const name of names) writeFileSync(`${f.project}/.claude/memories/${name}`, "# x\n");
+    for (const name of names) memory(name, "# x\n");
   };
   const usagePath = `${f.project}/.claude/memories/.usage.tsv`;
   const usage = () => readFileSync(usagePath, "utf8");
@@ -100,10 +101,15 @@ export function gateFixture(t: TestContext, mode = "enforce") {
     retrieveConcurrently,
     readMemory,
     memories,
+    memory,
     usagePath,
     usage,
     lastLog,
   };
+}
+
+export function linked(output: string): string {
+  return JSON.parse(output).hookSpecificOutput.additionalContext;
 }
 
 export function denied(output: string): { permissionDecisionReason: string } {

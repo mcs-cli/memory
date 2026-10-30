@@ -281,7 +281,7 @@ components:
 
   - id: hook-kb-gate-record
     displayName: KB gate — record searches and memory skills
-    description: Records each KB search and memory-skill invocation so delegated discovery and memory writes can be checked against them
+    description: Records each KB search and memory-skill invocation so delegated discovery, memory writes and file edits can be checked against them
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PostToolUse
     hookMatcher: "mcp__memory-loop__query|Skill"
@@ -297,8 +297,8 @@ components:
         event: PostToolUse
 
   - id: hook-kb-gate-check
-    displayName: KB gate — check sub-agent spawns and memory writes
-    description: Checks sub-agent spawns for KB findings and memory changes for an active memory skill
+    displayName: KB gate — check sub-agent spawns, memory writes and file edits
+    description: Checks sub-agent spawns for KB findings, memory changes for an active memory skill, and file edits for memories that mention the file
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: PreToolUse
     # The spawn tool is `Agent` in current Claude Code and `Task` in older
@@ -312,6 +312,16 @@ components:
         name: "PreToolUse hook registered"
         section: Hooks
         event: PreToolUse
+
+  - id: hook-kb-gate-compact
+    displayName: KB gate — mark compactions
+    description: Marks where the conversation was compacted, so file-edit notes only count KB searches still in context
+    hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
+    hookEvent: SessionStart
+    hookMatcher: "compact"
+    hook:
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
 
   - id: hook-kb-gate-retrieval
     displayName: KB gate — record memory retrievals
