@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "hooks/**/*.mts",
+      "hooks/**/*.mjs",
       "scripts/**/*.mts",
       "tests/**/*.mts",
       "tests/fixtures/*.json",

@@ -156,8 +156,10 @@ memory/
 ├── techpack.yaml                        # Manifest — defines all components
 ├── config/settings.json                 # Disables built-in auto-memory
 ├── hooks/
+│   ├── sync-memories.mjs                # Launcher: enables Node's compile cache, then loads the .mts
 │   ├── sync-memories.mts                 # Memory indexing/reindexing
 │   ├── memory-loop-activator.sh         # Knowledge extraction reminder
+│   ├── kb-gate.mjs                      # Launcher: enables Node's compile cache, then loads the .mts
 │   ├── kb-gate.mts                       # Keeps KB lookups ahead of delegated discovery
 │   └── shared.mts                       # Shared filesystem and project-path helpers
 ├── scripts/                            # Maintainer checks

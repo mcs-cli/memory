@@ -218,6 +218,22 @@ components:
       source: hooks/shared.mts
       destination: shared.mts
 
+  # Registered hooks run a small .mjs launcher that turns on Node's compile cache before
+  # importing these, so the TypeScript is stripped once instead of on every start.
+  - id: hook-sync-memories-module
+    displayName: Sync memories module
+    description: Indexing logic loaded by the sync memories launcher
+    hook:
+      source: hooks/sync-memories.mts
+      destination: sync-memories.mts
+
+  - id: hook-kb-gate-module
+    displayName: KB gate module
+    description: KB gate logic loaded by the KB gate launchers
+    hook:
+      source: hooks/kb-gate.mts
+      destination: kb-gate.mts
+
   - id: hook-continuous-learning
     displayName: Memory loop activator
     description: Reminds to evaluate learnings on each prompt
@@ -235,8 +251,8 @@ components:
     hookTimeout: 120
     hookStatusMessage: "Indexing memories..."
     hook:
-      source: hooks/sync-memories.mts
-      destination: sync-memories.mts
+      source: hooks/sync-memories.mjs
+      destination: sync-memories.mjs
 
   - id: hook-reindex-memories
     displayName: Reindex memories hook
@@ -247,8 +263,8 @@ components:
     hookTimeout: 120
     hookStatusMessage: "Reindexing memories..."
     hook:
-      source: hooks/sync-memories.mts
-      destination: sync-memories.mts
+      source: hooks/sync-memories.mjs
+      destination: sync-memories.mjs
 
   # ── KB-first delegation ─────────────────────────────────────────────────
   # Several registrations of one dispatcher script, which branches on
@@ -267,8 +283,8 @@ components:
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: UserPromptSubmit
     hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
+      source: hooks/kb-gate.mjs
+      destination: kb-gate.mjs
     # Checked because losing this one corrupts the gate rather than disabling it:
     # with no turn stamp the counter reads 0 forever, so every search ever made in
     # the session counts as fresh and the barrier silently widens from per-turn to
@@ -286,8 +302,8 @@ components:
     hookEvent: PostToolUse
     hookMatcher: "mcp__memory-loop__query|Skill"
     hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
+      source: hooks/kb-gate.mjs
+      destination: kb-gate.mjs
     # Same reasoning: without this, no search or skill is ever recorded, so the
     # gate is pure friction until the budget releases it.
     doctorChecks:
@@ -305,8 +321,8 @@ components:
     # builds. Matching only `Task` silently matches nothing.
     hookMatcher: "Agent|Task|Write|Edit|NotebookEdit|Bash"
     hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
+      source: hooks/kb-gate.mjs
+      destination: kb-gate.mjs
     doctorChecks:
       - type: hookEventExists
         name: "PreToolUse hook registered"
@@ -320,8 +336,8 @@ components:
     hookEvent: SessionStart
     hookMatcher: "compact"
     hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
+      source: hooks/kb-gate.mjs
+      destination: kb-gate.mjs
 
   - id: hook-kb-gate-retrieval
     displayName: KB gate — record memory retrievals
@@ -332,8 +348,8 @@ components:
     # Every Read starts this hook, and it never needs to block, so it stays off the turn's critical path.
     hookAsync: true
     hook:
-      source: hooks/kb-gate.mts
-      destination: kb-usage.mts
+      source: hooks/kb-gate.mjs
+      destination: kb-usage.mjs
 
   - id: hook-kb-subagent-brief
     displayName: Sub-agent KB brief
@@ -341,8 +357,8 @@ components:
     hookInterpreter: node --experimental-strip-types --disable-warning=ExperimentalWarning
     hookEvent: SubagentStart
     hook:
-      source: hooks/kb-gate.mts
-      destination: kb-gate.mts
+      source: hooks/kb-gate.mjs
+      destination: kb-gate.mjs
     doctorChecks:
       - type: hookEventExists
         name: "SubagentStart hook registered"
