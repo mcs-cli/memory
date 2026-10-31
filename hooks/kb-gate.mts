@@ -39,6 +39,14 @@ const WRITE_FLAGS: Record<string, RegExp> = {
   sort: /^-o|^--output/,
   find: /^-(?:delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)$/,
 };
+const MEMORY_DENY_REASONS = {
+  file_write:
+    "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them.",
+  bash_write:
+    "Memory files are changed only with Edit or Write, through Skill(continuous-learning) or Skill(memory-audit); a Bash command that may write to .claude/memories/ is denied even when one of them is active. If this command only reads, use the Read tool, or a plain read command (cat, head, grep, ls, sed -n, find, jq, read-only git) with no redirect, heredoc or command substitution.",
+  delete:
+    "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning).",
+};
 const GIT_READS = new Set(["log", "show", "diff", "status", "blame", "grep", "ls-files", "rev-parse", "cat-file"]);
 const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
 const RETRIEVAL_TOOLS = ["mcp__memory-loop__get", "mcp__memory-loop__multi_get", "Read"];
@@ -92,14 +100,6 @@ function isReadOnly(command: string): boolean {
     const flag = WRITE_FLAGS[name];
     return READ_COMMANDS.has(name) && !(flag && args.some(arg => flag.test(arg)));
   });
-}
-
-function mentionsDirectory(command: string, directory: string): boolean {
-  if (!directory) return false;
-  for (let at = command.indexOf(directory); at >= 0; at = command.indexOf(directory, at + 1)) {
-    if (!/[\w.-]/.test(command[at + directory.length] ?? "")) return true;
-  }
-  return false;
 }
 
 function readIfExists(file: string): string | undefined {
@@ -190,17 +190,15 @@ function gate(): void {
 
   const root = projectRoot();
   const memories = `${root}/.claude/memories`;
-  let bashPhase: "memory_write" | "memory_delete" | undefined;
+  let bashKind: "bash_write" | "delete" | undefined;
   if (isBash) {
-    // The symlink's target is what a command shows once the path was resolved, and it may be named anything.
-    const resolved = attempt(() => realpathSync(memories));
-    const fromRoot = resolved && relative(attempt(() => realpathSync(root)) ?? root, resolved);
-    const touchesMemories =
-      MEMORY_PATH.test(command) ||
-      (!!resolved && mentionsDirectory(command, resolved)) ||
-      (!!fromRoot && !fromRoot.startsWith("..") && mentionsDirectory(command, fromRoot));
-    if (!touchesMemories) return;
-    bashPhase = MEMORY_DELETE.test(command) ? "memory_delete" : "memory_write";
+    if (!MEMORY_PATH.test(command)) {
+      // The symlink's target is what a command shows once the path was resolved, and it may be named anything.
+      const resolved = attempt(() => realpathSync(memories));
+      const spellings = resolved ? [resolved, under(root, resolved)] : [];
+      if (!spellings.some(dir => dir && new RegExp(`${escapeRegExp(dir)}(?![\\w.-])`).test(command))) return;
+    }
+    bashKind = MEMORY_DELETE.test(command) ? "delete" : "bash_write";
   }
   const usage = `${memories}/.usage.tsv`;
   const state = `${root}/.claude/.kb-gate`;
@@ -422,8 +420,9 @@ mcp__memory-loop__query.
     return;
   }
 
-  if (isMemoryWrite || bashPhase) {
-    const phase = bashPhase ?? "memory_write";
+  const memoryKind = isMemoryWrite ? "file_write" : bashKind;
+  if (memoryKind) {
+    const phase = memoryKind === "delete" ? "memory_delete" : "memory_write";
     const subject = isMemoryWrite ? realPath(resolve(root, target)) : command.slice(0, 200);
     function logMemory(decision: string, extra = {}): void {
       logEvent({ phase, tool: payload.tool_name, target: subject, agent_type: agentType, decision, ...extra });
@@ -438,7 +437,7 @@ mcp__memory-loop__query.
       return;
     }
     // A Bash write has no single target and bypasses the skill's Edit-based checks, so no skill authorizes it.
-    const skill = bashPhase === "memory_write" ? undefined : activeMemorySkill(isMemoryWrite);
+    const skill = memoryKind === "bash_write" ? undefined : activeMemorySkill(isMemoryWrite);
     if (skill) {
       logMemory("allow", { skill });
       return;
@@ -456,11 +455,7 @@ mcp__memory-loop__query.
     logMemory("deny", { denials_turn: spent.length + 1 });
     output({
       permissionDecision: "deny",
-      permissionDecisionReason: isMemoryWrite
-        ? "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them."
-        : bashPhase === "memory_write"
-          ? "Memory files are changed only with Edit or Write, through Skill(continuous-learning) or Skill(memory-audit); a Bash command that may write to .claude/memories/ is denied even when one of them is active. If this command only reads, use the Read tool, or a plain read command (cat, head, grep, ls, sed -n, find, jq, read-only git) with no redirect, heredoc or command substitution."
-          : "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning).",
+      permissionDecisionReason: MEMORY_DENY_REASONS[memoryKind],
     });
     return;
   }
