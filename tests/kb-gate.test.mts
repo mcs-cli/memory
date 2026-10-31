@@ -264,13 +264,53 @@ test("deleting or moving memories through Bash needs memory-audit", t => {
   f.skill();
   assert.match(denied(f.bash("rm .claude/memories/learning_x.md")).permissionDecisionReason, /memory-audit/);
   assert.equal(f.lastLog().phase, "memory_delete");
-  denied(f.bash("git -C .claude/.memories-repo rm -- memories/learning_x.md"));
+  denied(f.bash("git -C ../shared rm -- memories/learning_x.md"));
   denied(f.bash("mv .claude/memories/a.md .claude/memories/b.md"));
   f.turn();
   f.skill("memory-audit");
   f.turn("approved");
   assert.equal(f.bash("rm .claude/memories/learning_x.md"), "");
   assert.equal(f.lastLog().skill, "memory-audit");
+});
+
+test("Bash writes to memories are denied even under a memory skill, until the budget releases one", t => {
+  const f = gateFixture(t);
+  f.turn();
+  f.skill();
+  f.skill("memory-audit");
+  for (const command of [
+    "python3 - <<'EOF'\nopen('.claude/memories/learning_x.md', 'w').write('x')\nEOF",
+    "echo x > .claude/memories/learning_x.md",
+    "cat a.md > .claude/memories/learning_x.md",
+    "printf x | tee .claude/memories/learning_x.md",
+    "sed -i '' 's/a/b/' .claude/memories/learning_x.md",
+    'ls .claude/memories; node -e \'require("fs").writeFileSync("x", "")\'',
+    "git -C ../shared checkout -- memories/learning_x.md",
+    "cat .claude/memories/a.md & cp b.md .claude/memories/a.md",
+  ]) {
+    f.turn();
+    assert.match(denied(f.bash(command)).permissionDecisionReason, /Edit or Write/);
+    assert.equal(f.lastLog().phase, "memory_write");
+  }
+  for (let i = 0; i < 2; i++) denied(f.bash("echo x >> .claude/memories/learning_x.md"));
+  assert.equal(f.bash("echo x >> .claude/memories/learning_x.md"), "");
+  assert.equal(f.lastLog().skip_reason, "budget_turn");
+});
+
+test("Bash commands naming a symlinked memories dir by its target are gated", t => {
+  const f = gateFixture(t);
+  rmSync(`${f.project}/.claude/memories`, { recursive: true });
+  mkdirSync(`${f.project}/.claude/shared/kb`, { recursive: true });
+  symlinkSync(`${f.project}/.claude/shared/kb`, `${f.project}/.claude/memories`);
+  f.turn();
+  denied(f.bash(`echo x > ${f.project}/.claude/shared/kb/learning_x.md`));
+  assert.equal(f.lastLog().phase, "memory_write");
+  denied(f.bash("rm .claude/shared/kb/learning_x.md"));
+  assert.equal(f.lastLog().phase, "memory_delete");
+  const before = readFileSync(f.log, "utf8");
+  assert.equal(f.bash("echo x > .claude/shared/kb2/notes.md"), "");
+  assert.equal(f.bash("cat .claude/shared/kb/learning_x.md"), "");
+  assert.equal(readFileSync(f.log, "utf8"), before);
 });
 
 test("unrelated Bash commands pass without evaluation", t => {
@@ -283,6 +323,15 @@ test("unrelated Bash commands pass without evaluation", t => {
     "docker run --rm memories-image",
     "grep -rn memories . | wc -l",
     "cat .claude/memories/a.md | grep rm",
+    'grep -rn "rm " skills/ | grep memories',
+    "git commit -m 'Gate Bash writes to memories'",
+    "echo x > notes/memories.md",
+    "sed -n '1,20p' .claude/memories/a.md",
+    "git -c core.pager=cat log --oneline -- memories/a.md",
+    "git -C .claude/memories rev-parse --show-toplevel",
+    "find .claude/memories -name '*.md' | sort",
+    "jq . .claude/memories/x.json 2>/dev/null",
+    "grep -E 'a|b>c' .claude/memories/a.md 2>&1 | head -5",
   ]) {
     assert.equal(f.bash(command), "");
   }

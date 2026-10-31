@@ -27,6 +27,27 @@ const FILE_WRITE_TOOLS = ["Write", "Edit", "NotebookEdit"];
 const MAX_MEMORY_WRITE_DENIALS_PER_TURN = 3;
 const MAX_LINKED_NOTES_PER_TURN = 3;
 const MEMORY_DELETE = /(?:^|[^\w-])(?:rm|unlink|mv)(?=\s)/;
+const MEMORY_PATH = /\.claude\/memories(?![\w.-])|(?:^|[\s'"=])memories\//;
+// An allowlist of reads, because a script can write a file in more ways than a denylist could name.
+const READ_COMMANDS = new Set(
+  "cat head tail less grep egrep rg ugrep ls tree wc stat file diff cmp jq cut tr sort uniq nl column echo printf pwd cd test [ basename dirname realpath readlink shasum md5 sed find".split(
+    " ",
+  ),
+);
+const WRITE_FLAGS: Record<string, RegExp> = {
+  sed: /^-[a-zA-Z]*i|^--in-place/,
+  sort: /^-o|^--output/,
+  find: /^-(?:delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)$/,
+};
+const MEMORY_DENY_REASONS = {
+  file_write:
+    "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them.",
+  bash_write:
+    "Memory files are changed only with Edit or Write, through Skill(continuous-learning) or Skill(memory-audit); a Bash command that may write to .claude/memories/ is denied even when one of them is active. If this command only reads, use the Read tool, or a plain read command (cat, head, grep, ls, sed -n, find, jq, read-only git) with no redirect, heredoc or command substitution.",
+  delete:
+    "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning).",
+};
+const GIT_READS = new Set(["log", "show", "diff", "status", "blame", "grep", "ls-files", "rev-parse", "cat-file"]);
 const SLASH_SKILL = new RegExp(`(?:^|[\\s>])/(?:[\\w-]+:)?(${Object.keys(MEMORY_SKILL_SCOPES).join("|")})\\b`, "g");
 const RETRIEVAL_TOOLS = ["mcp__memory-loop__get", "mcp__memory-loop__multi_get", "Read"];
 // qmd heads every returned document with this line, which is the only place a docid or glob resolves to a file.
@@ -55,6 +76,30 @@ function mentionsMemories(path: string): boolean {
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function gitSubcommand(args: string[]): string {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index] ?? "";
+    if (arg === "-C" || arg === "-c") index++;
+    else if (!arg.startsWith("-")) return arg;
+  }
+  return "";
+}
+
+function isReadOnly(command: string): boolean {
+  if (/\$\(|`|<</.test(command)) return false;
+  const plain = command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''").replace(/\d*>&\d+|\d*>\s*\/dev\/null/g, " ");
+  if (plain.includes(">")) return false;
+  return plain.split(/&&|\|\||[;&|\n]/).every(segment => {
+    const words = segment.trim().split(/\s+/).filter(Boolean);
+    while (/^\w+=/.test(words[0] ?? "")) words.shift();
+    const [name, ...args] = words;
+    if (name === undefined) return true;
+    if (name === "git") return GIT_READS.has(gitSubcommand(args));
+    const flag = WRITE_FLAGS[name];
+    return READ_COMMANDS.has(name) && !(flag && args.some(arg => flag.test(arg)));
+  });
 }
 
 function readIfExists(file: string): string | undefined {
@@ -140,12 +185,21 @@ function gate(): void {
   const target = payload.tool_input?.file_path || payload.tool_input?.notebook_path || "";
   if (target && !isFileWrite && !mentionsMemories(target)) return;
   const command = String(payload.tool_input?.command ?? "");
-  const isMemoryDelete =
-    event === "PreToolUse" && payload.tool_name === "Bash" && command.includes("memories") && MEMORY_DELETE.test(command);
-  if (event === "PreToolUse" && payload.tool_name === "Bash" && !isMemoryDelete) return;
+  const isBash = event === "PreToolUse" && payload.tool_name === "Bash";
+  if (isBash && isReadOnly(command)) return;
 
   const root = projectRoot();
   const memories = `${root}/.claude/memories`;
+  let bashKind: "bash_write" | "delete" | undefined;
+  if (isBash) {
+    if (!MEMORY_PATH.test(command)) {
+      // The symlink's target is what a command shows once the path was resolved, and it may be named anything.
+      const resolved = attempt(() => realpathSync(memories));
+      const spellings = resolved ? [resolved, under(root, resolved)] : [];
+      if (!spellings.some(dir => dir && new RegExp(`${escapeRegExp(dir)}(?![\\w.-])`).test(command))) return;
+    }
+    bashKind = MEMORY_DELETE.test(command) ? "delete" : "bash_write";
+  }
   const usage = `${memories}/.usage.tsv`;
   const state = `${root}/.claude/.kb-gate`;
   const log = `${root}/.claude/.kb-gate.log`;
@@ -366,8 +420,9 @@ mcp__memory-loop__query.
     return;
   }
 
-  if (isMemoryWrite || isMemoryDelete) {
-    const phase = isMemoryWrite ? "memory_write" : "memory_delete";
+  const memoryKind = isMemoryWrite ? "file_write" : bashKind;
+  if (memoryKind) {
+    const phase = memoryKind === "delete" ? "memory_delete" : "memory_write";
     const subject = isMemoryWrite ? realPath(resolve(root, target)) : command.slice(0, 200);
     function logMemory(decision: string, extra = {}): void {
       logEvent({ phase, tool: payload.tool_name, target: subject, agent_type: agentType, decision, ...extra });
@@ -381,7 +436,8 @@ mcp__memory-loop__query.
       });
       return;
     }
-    const skill = activeMemorySkill(isMemoryWrite);
+    // A Bash write has no single target and bypasses the skill's Edit-based checks, so no skill authorizes it.
+    const skill = memoryKind === "bash_write" ? undefined : activeMemorySkill(isMemoryWrite);
     if (skill) {
       logMemory("allow", { skill });
       return;
@@ -399,9 +455,7 @@ mcp__memory-loop__query.
     logMemory("deny", { denials_turn: spent.length + 1 });
     output({
       permissionDecision: "deny",
-      permissionDecisionReason: isMemoryWrite
-        ? "Memory files are written only through the continuous-learning or memory-audit skill, and continuous-learning has not been invoked in this turn. Invoke Skill(continuous-learning) now and run its search and pre-write checks before retrying. Working from a copy loaded in an earlier turn is what skips them."
-        : "Memory files are deleted or moved only by the memory-audit skill, after the user approves the batch. Run Skill(memory-audit) and follow its approval step before retrying; to correct a memory instead, edit it through Skill(continuous-learning).",
+      permissionDecisionReason: MEMORY_DENY_REASONS[memoryKind],
     });
     return;
   }
