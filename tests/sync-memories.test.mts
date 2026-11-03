@@ -33,8 +33,8 @@ for (const linked of [false, true]) {
     const f = indexer(t);
     if (linked) {
       rmSync(`${f.project}/.claude/memories`, { recursive: true });
-      mkdirSync(`${f.project}/.claude/.memories-repo/memories`, { recursive: true });
-      symlinkSync(".memories-repo/memories", `${f.project}/.claude/memories`);
+      mkdirSync(`${f.project}/.claude/shared/kb`, { recursive: true });
+      symlinkSync("shared/kb", `${f.project}/.claude/memories`);
     }
     for (let i = 0; i < 2; i++) {
       const calls = f.run();
